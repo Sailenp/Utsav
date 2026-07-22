@@ -1,0 +1,2314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Utsav Discover — Visitor & Business</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Optional Firebase (compat) — keep placeholders for local/mock auth if not configured -->
+  <script src="https://www.gstatic.com/firebasejs/10.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.15.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.15.0/firebase-firestore-compat.js"></script>
+
+  <!-- QR Scanner library -->
+  <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+
+  <style>
+    :root { --overlay: rgba(255,192,203,0.22); }
+    body {
+      transition: background-color 0.25s, color 0.25s;
+      background-image: url('https://png.pngtree.com/thumb_back/fh260/background/20210907/pngtree-sakura-trees-flowers-pink-beautiful-banner-image_811293.jpg');
+      background-repeat: no-repeat;
+      background-size: cover;
+      background-attachment: fixed;
+      background-position: center;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body::before {
+      content:""; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--overlay); z-index:-1;
+    }
+    .page { display: none; }
+    .page.active { display: block; }
+    .star { cursor:pointer; font-size:20px; color:#cbd5e1; } /* gray-300 */
+    .star.selected { color: gold; }
+    .card-img{ min-height:120px; max-height:160px; object-fit:cover; width:100%; border-radius:8px; }
+    .vendor-img{ max-width:180px; max-height:140px; object-fit:cover; border-radius:8px; display:block; margin-top:.5rem; }
+    .pill-active { transform: scale(1.03); opacity:1; }
+    .hidden { display: none !important; }
+    .modal-backdrop { position: fixed; inset:0; background: rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:1200; }
+    .modal-card { background:white; border-radius:10px; padding:16px; max-width:900px; width:95%; max-height:80vh; overflow:auto; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
+    @media (max-width:640px) { .card-img { max-height:120px; } }
+
+    /* helpers */
+    .feature-tile { background: rgba(255,255,255,0.85); border-radius:10px; padding:16px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+    .hero-gradient { background: linear-gradient(90deg, rgba(255,255,255,0.95), rgba(255,255,255,0.75)); border-radius:12px; padding: 24px; }
+    .badge { background:#fef3c7; color:#92400e; padding:4px 8px; border-radius:999px; font-weight:600; font-size:12px; }
+    .qr-mock { width:140px; height:140px; background:#111; display:inline-block; border-radius:8px; color:white; display:flex; align-items:center; justify-content:center; font-size:12px; }
+    .offer-pill { display:inline-block; padding:4px 8px; background:#d1fae5; color:#065f46; border-radius:999px; font-size:12px; }
+    .map-pick-hint { font-size:12px; color:#374151; }
+    .thumb { width:80px; height:60px; object-fit:cover; border-radius:6px; cursor:pointer; margin-right:6px; border:2px solid transparent; }
+    .thumb.selected { border-color:#2563eb; }
+    .review-image { max-width:160px; max-height:120px; object-fit:cover; border-radius:6px; display:block; margin-top:6px; }
+
+    /* scanner feedback */
+    .scan-feedback { font-size:64px; text-align:center; margin-top:8px; }
+    .scan-text { font-size:18px; text-align:center; margin-top:8px; }
+
+    /* simple dark-mode adjustments */
+    body.dark-mode { background-color:#0b1220 !important; }
+    body.dark-mode .modal-card { background:#0f1724; color:#e6eef8; }
+    body.dark-mode .feature-tile { background: rgba(10,14,20,0.6); color: #e6eef8; }
+
+    /* admin login modal styling */
+    .admin-login-modal .modal-card { max-width:420px; padding:20px; border-radius:12px; }
+    .admin-input { width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; margin-top:8px; }
+    .admin-actions { display:flex; gap:8px; margin-top:12px; justify-content:flex-end; }
+
+    /* admin photo controls */
+    .photo-control { display:flex; gap:12px; align-items:center; padding:10px; border:1px solid #eee; border-radius:8px; background:#fff; }
+    .photo-preview { width:160px; height:90px; object-fit:cover; border-radius:6px; border:1px solid #ddd; }
+    .photo-meta { flex:1; }
+    .admin-save-btn { background:#059669; color:white; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    .admin-remove-btn { background:#ef4444; color:white; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    .admin-change-btn { background:#f97316; color:white; padding:8px 12px; border-radius:8px; cursor:pointer; }
+  </style>
+</head>
+<body class="bg-white text-gray-900">
+
+<!-- Header -->
+<header class="bg-white/90 backdrop-blur sticky top-0 z-40 shadow-sm">
+  <div class="flex items-start justify-between p-1"> <!-- reduced padding for top-left -->
+    
+    <!-- LEFT SIDE: logo + title -->
+    <div class="flex items-start gap-2 ml-1 mt-1"> <!-- 4px from top & left -->
+      <img src="https://www.hindustantimes.com/ht-img/img/2024/10/05/1600x900/navratri_2024_maa_durga_weapons_1728109547675_1728109547940.png"
+           alt="logo" class="w-10 h-10 rounded-full object-cover">
+      <div>
+        <div class="text-lg font-semibold">Utsav Discover</div>
+        <div class="text-xs text-gray-600">Festivals • Food • Stays</div>
+      </div>
+    </div>
+
+    <!-- RIGHT SIDE: buttons & nav -->
+    <div class="flex items-center gap-4 mr-1 mt-1"> <!-- optional 4px margin from top/right -->
+      <button id="authOpenBtn" class="px-3 py-1 bg-indigo-600 text-white rounded text-sm">Sign Up / Login</button>
+      <div id="userInfo" class="hidden items-center gap-2">
+        <span id="userName" class="text-sm text-gray-700"></span>
+        <button id="logoutBtn" class="px-3 py-1 bg-gray-600 text-white rounded text-sm">Logout</button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="visitorModeBtn" class="px-3 py-1 rounded bg-green-500 text-white text-sm">Visitor</button>
+        <button id="businessModeBtn" class="px-3 py-1 rounded bg-indigo-600 text-white text-sm">Business Owner</button>
+      </div>
+
+      <nav id="topNav" class="hidden md:flex gap-4 items-center text-sm text-gray-700">
+        <a href="#" data-target="home" class="nav-link hover:underline">Home</a>
+        <a href="#" data-target="festival" class="nav-link hover:underline">Festival</a>
+        <a href="#" data-target="food" class="nav-link hover:underline">Food</a>
+        <a href="#" data-target="stay" class="nav-link hover:underline">Stay</a>
+        <a href="#" data-target="plan-trip" class="nav-link hover:underline">Plan Trip</a>
+      </nav>
+
+      <button id="switchMode" class="ml-2 px-3 py-1 text-sm bg-gray-100 rounded">Switch Mode</button>
+      <button id="themeToggle" class="ml-2 px-3 py-1 rounded bg-gray-200 text-sm">Light / Dark</button>
+      <button id="openScannerBtn" class="ml-2 px-3 py-1 rounded bg-green-600 text-white text-sm">Scan QR</button>
+
+      <div id="adminHeaderArea" class="flex items-center gap-2 ml-2">
+        <button id="adminOpenBtn" class="px-3 py-1 rounded bg-yellow-400 text-sm">Admin Login</button>
+      </div>
+    </div>
+
+  </div>
+</header>
+
+<!-- Auth Modal -->
+<div id="authModal" class="hidden modal-backdrop">
+  <div class="modal-card">
+    <div class="flex justify-between items-center">
+      <h3 class="text-lg font-semibold">Sign Up / Login</h3>
+      <button id="closeAuthModal" class="text-sm text-gray-600">Close</button>
+    </div>
+
+    <div class="mt-4 space-y-3">
+      <button id="googleLoginBtn" class="w-full bg-red-500 text-white p-2 rounded">Continue with Google</button>
+
+      <div class="text-sm text-gray-600 text-left">Or sign in with phone (OTP)</div>
+      <input id="phoneInput" class="w-full border p-2 rounded" placeholder="+91XXXXXXXXXX" />
+
+      <div id="recaptcha-container" class="mt-2"></div>
+      
+      <!-- FIX: Added missing Send OTP button -->
+      <button id="sendOtpBtn" class="w-full bg-blue-500 text-white p-2 rounded mt-2">Send OTP</button>
+
+      <!-- FIX: Removed misplaced buttons that caused errors. They were likely from a copy-paste. -->
+      
+      <input id="otpInput" class="w-full border p-2 rounded hidden" placeholder="Enter OTP" />
+      <div class="flex gap-2">
+        <button id="verifyOtpBtn" class="flex-1 bg-green-500 text-white p-2 rounded hidden">Verify OTP</button>
+      </div>
+
+      <div class="mt-2 text-sm text-gray-500">
+        Or use local quick-login: enter a name and choose role (for development/offline)
+      </div>
+      <div class="flex gap-2">
+        <input id="mockName" class="flex-1 border p-2 rounded" placeholder="Name for local login" />
+        <select id="mockRole" class="w-40 border p-2 rounded">
+          <option value="visitor">Visitor</option>
+          <option value="vendor">Vendor</option>
+        </select>
+      </div>
+      <div class="flex gap-2 mt-2">
+        <button id="mockLoginBtn" class="flex-1 bg-indigo-600 text-white p-2 rounded">Local Sign In</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <!-- Admin Login Popup Modal (centered) -->
+  <div id="adminLoginModal" class="hidden modal-backdrop admin-login-modal">
+    <div class="modal-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="font-weight:700">Admin Login</h3>
+        <button id="closeAdminLogin" style="background:transparent;border:0;font-size:14px;cursor:pointer">Close</button>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div style="font-size:13px;color:#444">Enter admin credentials to access Admin Dashboard.</div>
+        <input id="adminModalEmail" class="admin-input" placeholder="Admin email">
+        <input id="adminModalPass" class="admin-input" type="password" placeholder="Password">
+        <div class="admin-actions">
+          <button id="adminModalCancel" class="px-3 py-1 rounded bg-gray-200">Cancel</button>
+          <button id="adminModalLogin" class="px-3 py-1 rounded bg-yellow-400">Login</button>
+        </div>
+        <div id="adminModalHint" style="font-size:12px;color:#666;margin-top:8px;"></div>
+        <div id="adminModalError" style="color:#b91c1c;margin-top:8px;display:none;">Invalid credentials</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hero / PPT-inspired -->
+  <section class="container mx-auto py-12 px-4">
+    <div class="hero-gradient mx-auto max-w-5xl">
+      <div class="flex flex-col md:flex-row items-center gap-6">
+        <div class="flex-1">
+          <div class="badge">AI-Powered • Festival-first</div>
+          <h1 class="text-3xl md:text-4xl font-bold mt-3">Utsav Discover — Festivals, Food & Stays</h1>
+          <p class="mt-3 text-gray-700">Festival-only AI plans. Vendor locations must be picked using Google Maps for accuracy.</p>
+          <div class="flex gap-3 mt-4">
+            <button id="aiFestivalPlan" class="px-4 py-2 bg-indigo-600 text-white rounded">AI Plan: Festivals Only</button>
+            <button id="openTicketFlow" class="px-4 py-2 bg-rose-500 text-white rounded">Tickets & Crowd</button>
+          </div>
+          <div class="mt-4 text-sm text-gray-600">Background and style kept unchanged.</div>
+        </div>
+        <div class="w-full md:w-80">
+          <img id="heroImage" src="https://discoverindiabycar.com/wp-content/uploads/2024/12/Famous-Festivals-of-West-Bengal-Dol-Purnima.jpg" alt="festival" class="rounded shadow-lg object-cover w-full h-56">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature tiles -->
+  <section class="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="feature-tile">
+      <h3 class="font-semibold">Festival Discovery</h3>
+      <p class="text-sm text-gray-600 mt-2">Find festival events and add them as the core of your trip plan.</p>
+      <div class="mt-3"><button onclick="showPage('festival')" class="px-3 py-1 bg-yellow-400 rounded">Browse Festivals</button></div>
+    </div>
+    <div class="feature-tile">
+      <h3 class="font-semibold">Accommodation Finder</h3>
+      <p class="text-sm text-gray-600 mt-2">Find homestays & hotels ranked by reviews.</p>
+      <div class="mt-3"><button onclick="showPage('stay')" class="px-3 py-1 bg-sky-400 rounded">Find Stays</button></div>
+    </div>
+    <div class="feature-tile">
+      <h3 class="font-semibold">Food & Stalls</h3>
+      <p class="text-sm text-gray-600 mt-2">Explore food stalls and vendor offers.</p>
+      <div class="mt-3"><button onclick="showPage('food')" class="px-3 py-1 bg-rose-400 rounded">Explore Food</button></div>
+    </div>
+  </section>
+
+  <!-- LANDING -->
+  <main id="landing" class="page active">
+    <div class="container mx-auto py-20 px-4 text-center">
+      <h1 class="text-4xl font-bold mb-4">Welcome to Utsav Discover</h1>
+      <p class="mb-8 text-lg text-gray-700">Choose how you'd like to use the site:</p>
+
+      <div class="flex flex-col sm:flex-row justify-center gap-6">
+        <div id="landingVisitor" class="cursor-pointer bg-white/80 p-6 rounded shadow w-full sm:w-80">
+          <h2 class="text-2xl font-semibold">Visitor / Tourist</h2>
+          <p class="mt-2 text-sm text-gray-600">Browse festivals, food stalls, and stays. Create your trip itinerary and submit reviews.</p>
+          <button class="mt-4 px-4 py-2 bg-green-500 text-white rounded" onclick="enterMode('visitor')">Enter as Visitor</button>
+        </div>
+
+        <div id="landingBusiness" class="cursor-pointer bg-white/80 p-6 rounded shadow w-full sm:w-80">
+          <h2 class="text-2xl font-semibold">Business Owner / Vendor</h2>
+          <p class="mt-2 text-sm text-gray-600">Add and manage your stalls, hotels, festivals — pick location ONLY via Google Maps.</p>
+          <button class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded" onclick="enterMode('business')">Enter as Business</button>
+        </div>
+      </div>
+
+      <div class="mt-12 text-sm text-gray-600">Tip: You can switch mode anytime using the header buttons.</div>
+    </div>
+  </main>
+
+  <!-- HOME -->
+  <main id="home" class="page">
+    <div class="container mx-auto px-4 py-12">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white/80 p-6 rounded shadow">
+          <h2 class="text-2xl font-semibold">Discover Festivals & Culture</h2>
+          <p class="mt-2 text-gray-600">Explore entries added by local businesses and visitors. Use the navigation or the sections below.</p>
+          <div class="mt-4 flex gap-2">
+            <button onclick="showPage('festival')" class="px-3 py-1 bg-yellow-400 rounded">Browse Festivals</button>
+            <button onclick="showPage('food')" class="px-3 py-1 bg-rose-400 rounded">Explore Food</button>
+            <button onclick="showPage('stay')" class="px-3 py-1 bg-sky-400 rounded">Find Stays</button>
+          </div>
+        </div>
+
+        <div class="bg-white/80 p-6 rounded shadow">
+          <h2 class="text-2xl font-semibold">Saved Itinerary</h2>
+          <p class="mt-2 text-gray-600">Your trip items are saved locally on this device.</p>
+          <div id="home-itinerary" class="mt-4"></div>
+          <div class="mt-4">
+            <button onclick="showPage('plan-trip')" class="px-3 py-1 bg-indigo-600 text-white rounded">Open Plan Trip</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- FESTIVAL -->
+  <main id="festival" class="page">
+    <div class="container mx-auto px-4 py-12">
+      <h1 class="text-3xl font-semibold mb-4">Festivals</h1>
+      <div id="festival-list" class="flex flex-wrap -m-4"></div>
+    </div>
+  </main>
+
+  <!-- FOOD -->
+  <main id="food" class="page">
+    <div class="container mx-auto px-4 py-12">
+      <h1 class="text-3xl font-semibold mb-4">Food Stalls</h1>
+      <div id="food-list" class="flex flex-wrap -m-4"></div>
+    </div>
+  </main>
+
+  <!-- STAY -->
+  <main id="stay" class="page">
+    <div class="container mx-auto px-4 py-12">
+      <h1 class="text-3xl font-semibold mb-4">Stays & Homestays</h1>
+      <div id="stay-list" class="flex flex-wrap -m-4"></div>
+    </div>
+  </main>
+
+  <!-- PLAN TRIP -->
+  <main id="plan-trip" class="page">
+    <div class="container mx-auto px-4 py-12">
+      <div class="flex flex-col md:flex-row gap-8">
+        <div class="md:w-3/5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold">All Vendors</h2>
+            <div>
+              <label class="mr-2">Filter</label>
+              <select id="filter-cat" class="border px-2 py-1 rounded">
+                <option value="all">All</option>
+                <option value="Festival">Festival</option>
+                <option value="Food">Food</option>
+                <option value="Stay">Stay</option>
+              </select>
+            </div>
+          </div>
+          <div id="all-vendors-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+        </div>
+
+        <div class="md:w-2/5">
+          <h2 class="text-xl font-semibold mb-3">Your Trip Itinerary</h2>
+          <div id="itinerary-container" class="space-y-3"></div>
+
+          <div class="mt-6 bg-white/80 p-4 rounded">
+            <h3 class="font-semibold">Festival-only Plans (AI)</h3>
+            <div id="festival-plans" class="mt-3 space-y-2">
+              <!-- AI festival plans will be injected here -->
+            </div>
+            <div class="mt-4">
+              <button id="clear-itinerary" class="bg-red-500 px-3 py-1 rounded text-white">Clear Itinerary</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- BUSINESS -->
+  <main id="business" class="page">
+    <div class="container mx-auto px-4 py-12">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white/90 p-6 rounded shadow">
+          <h2 class="text-2xl font-semibold mb-3">Add / Register Your Stall or Stay</h2>
+          <form id="biz-form" class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium">Category</label>
+              <select id="biz-category" required class="w-full p-2 border rounded">
+                <option value="">Select category</option>
+                <option value="Festival">Festival</option>
+                <option value="Food">Food</option>
+                <option value="Stay">Stay</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Name</label>
+              <input id="biz-name" required class="w-full p-2 border rounded" placeholder="e.g. Durga Pandals / Rosogolla Stall">
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Location — must be picked on Google Maps</label>
+              <div class="flex gap-2">
+                <button type="button" id="biz-open-maps" class="px-3 py-1 bg-gray-100 rounded text-sm">Pick on Google Maps</button>
+                <button type="button" id="biz-use-my-location" class="px-3 py-1 bg-gray-100 rounded text-sm">Use My Current Location</button>
+              </div>
+              <div class="mt-2 map-pick-hint">After picking on Google Maps: right-click the location → "What's here?" → copy the coordinates (lat, lng). Paste below and click Confirm Location.</div>
+              <input id="biz-coords-input" class="mt-2 w-full p-2 border rounded" placeholder="Paste coordinates here, e.g. 23.2599,87.8722">
+              <div class="flex gap-2 mt-2">
+                <button type="button" id="confirm-location-btn" class="px-3 py-1 bg-green-600 text-white rounded">Confirm Location</button>
+                <button type="button" id="clear-location-btn" class="px-3 py-1 bg-gray-200 rounded">Clear</button>
+              </div>
+              <div id="biz-coords-display" class="text-xs text-gray-600 mt-2"></div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Image (jpg/png) — max 2 MB</label>
+              <input id="biz-image" type="file" accept=".jpg,.jpeg,.png,image/*" class="w-full p-2 border rounded bg-white">
+              <img id="biz-image-preview" class="vendor-img hidden" alt="preview">
+              <div id="biz-image-error" class="text-xs text-red-600 mt-1 hidden"></div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Details / Short Description</label>
+              <textarea id="biz-details" class="w-full p-2 border rounded h-28" placeholder="Describe your event / stall / stay"></textarea>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Live Availability</label>
+              <select id="biz-availability" class="w-full p-2 border rounded">
+                <option value="available">Available</option>
+                <option value="soldout">Sold Out / Unavailable</option>
+                <option value="limited">Limited</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium">Offers / Special Note (optional)</label>
+              <input id="biz-offer" class="w-full p-2 border rounded" placeholder="E.g. 10% off from 6–8pm">
+            </div>
+
+            <div class="flex gap-3">
+              <button type="submit" class="bg-indigo-600 px-4 py-2 text-white rounded">Add Entry (Requires confirmed location)</button>
+            </div>
+          </form>
+          <div class="text-xs text-gray-500 mt-2">Note: location must be confirmed using Google Maps before submitting. You can also use current location.</div>
+        </div>
+
+        <div>
+          <h2 class="text-2xl font-semibold mb-3">Your Listings (All Vendors)</h2>
+          <div id="vendor-management-list" class="space-y-4"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- bottom helper -->
+  <div class="fixed bottom-4 right-4 z-50">
+    <button id="openLanding" class="px-3 py-1 bg-gray-100 rounded text-sm">Open Mode Select</button>
+  </div>
+
+  <!-- Ticket Modal (mock) -->
+  <div id="ticketModal" class="hidden modal-backdrop">
+    <div class="modal-card">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold">Ticketing & Crowd Control</h3>
+        <button id="closeTicketModal" class="text-sm text-gray-600">Close</button>
+      </div>
+      <div class="mt-4">
+        <p class="text-sm text-gray-700">Book a (mock) ticket for special events.</p>
+        <div class="mt-4 space-y-3">
+          <label class="block text-sm">Event Name</label>
+          <input id="ticket-event" class="w-full border p-2 rounded" placeholder="Festival Special: Evening Concert">
+          <div class="flex gap-2 mt-2">
+            <input id="ticket-name" class="flex-1 border p-2 rounded" placeholder="Your name">
+            <input id="ticket-phone" class="w-44 border p-2 rounded" placeholder="+91XXXXXXXXXX">
+          </div>
+          <div class="flex gap-2 mt-2">
+            <select id="ticket-type" class="border p-2 rounded">
+              <option value="general">General</option>
+              <option value="vip">VIP</option>
+            </select>
+            <input id="ticket-qty" type="number" min="1" value="1" class="w-24 border p-2 rounded">
+          </div>
+          <div class="mt-3">
+            <button id="buyTicketBtn" class="px-4 py-2 bg-indigo-600 text-white rounded">Buy (Mock)</button>
+          </div>
+          <div id="ticket-result" class="mt-4"></div>
+          <div class="mt-2 text-xs text-gray-500">Tip: Each ticket is single-use. Scanner will mark it used on first valid scan.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scanner Modal (unified UI) -->
+  <div id="scannerModal" class="hidden modal-backdrop">
+    <div class="modal-card">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold">Scan QR Code</h3>
+        <button id="closeScannerBtn" class="text-sm text-gray-600">Close</button>
+      </div>
+      <div id="reader" style="width:100%;max-width:420px;margin:16px auto;"></div>
+      <div id="scan-feedback" class="scan-feedback"></div>
+      <div id="scan-text" class="scan-text"></div>
+      <div class="mt-3 text-sm text-gray-600 text-center">Point camera at a ticket QR or vendor QR.</div>
+    </div>
+  </div>
+
+  <!-- Admin Dashboard (this section will be shown/hidden depending on admin login) -->
+  <section id="admin-dashboard" class="hidden p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-2xl font-bold">Admin Dashboard</h2>
+      <div>
+        <button id="admin-dashboard-logout" class="px-3 py-1 bg-gray-200 rounded mr-2">Logout Admin</button>
+      </div>
+    </div>
+
+    <!-- Photo Controls (manage multiple predefined photos) -->
+    <div class="mb-6">
+      <h3 class="text-lg font-semibold mb-2">Site Photo Controls (site-wide, vendor photos protected)</h3>
+
+      <div id="admin-photo-list" class="space-y-3">
+        <!-- JS will inject photo controls here -->
+      </div>
+
+      <div class="mt-3 flex gap-3">
+        <button id="admin-save-all" class="admin-save-btn">Save Changes</button>
+        <button id="admin-revert-all" class="admin-remove-btn">Revert All to Defaults</button>
+      </div>
+
+      <div class="text-sm text-gray-500 mt-2">Note: Vendor-uploaded images are not editable by admin. Admin changes apply to built-in site photos and persist for all users after saving.</div>
+    </div>
+
+    <!-- Manage Vendor Uploads -->
+    <div>
+      <h3 class="text-lg font-semibold mb-2">Manage Vendors</h3>
+      <div id="admin-vendor-list" class="space-y-3"></div>
+    </div>
+
+    <div class="mt-6">
+      <button id="openTicketScannerAdmin" class="bg-blue-600 text-white px-4 py-2 rounded hidden">Open Ticket Scanner</button>
+    </div>
+  </section>
+
+
+  <!-- App script (single combined, cleaned up) -->
+  <script>
+  /************************************************************************
+   * Utsav Discover — Single-file app (localStorage)
+   * Admin: full photo management (except vendor images), delete vendors,
+   * Save/Remove/Revert functionality. No sample data import.
+   **************************************************************************/
+
+  // Firebase placeholders (keep if you want to enable real auth)
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  let useFirebase = true;
+  try {
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('YOUR_')) {
+      useFirebase = false;
+    }
+  } catch (e) { useFirebase = false; }
+
+  let firebaseApp = null;
+  let firebaseAuth = null;
+  let firebaseDB = null;
+
+  if (useFirebase) {
+    try {
+      firebaseApp = firebase.initializeApp(firebaseConfig);
+      firebaseAuth = firebase.auth();
+      firebaseDB = firebase.firestore();
+      console.log('Firebase initialized.');
+    } catch (err) {
+      console.warn('Firebase init failed, falling back to local auth:', err);
+      useFirebase = false;
+    }
+  } else {
+    console.log('Firebase placeholders detected — using local/mock auth for full local functionality.');
+  }
+
+  // App constants
+  const KEY_VENDORS = 'ud_vendors_v3';
+  const KEY_ITINERARY = 'ud_itinerary_v3';
+  const KEY_LOCAL_USERS = 'ud_local_users_v1';
+  const KEY_ADMIN_LOGGED = 'ud_admin_logged_v1';
+  const KEY_SITE_PHOTOS = 'ud_site_photos_v1'; // stores overrides for predefined photos
+  const DEFAULTS = {
+    siteLogo: "https://www.hindustantimes.com/ht-img/img/2024/10/05/1600x900/navratri_2024_maa_durga_weapons_1728109547675_1728109547940.png",
+    heroImage: "https://discoverindiabycar.com/wp-content/uploads/2024/12/Famous-Festivals-of-West-Bengal-Dol-Purnima.jpg",
+    homepageBackground: "https://png.pngtree.com/thumb_back/fh260/background/20210907/pngtree-sakura-trees-flowers-pink-beautiful-banner-image_811293.jpg"
+  };
+  const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+
+  let appMode = localStorage.getItem('ud_mode') || null;
+  let currentUser = null;
+  let currentUserRole = null;
+  let isAdminLoggedIn = !!localStorage.getItem(KEY_ADMIN_LOGGED);
+
+  function idNow(){ return Date.now() + Math.floor(Math.random()*1000); }
+  function escapeHtml(s){ if(s===null||s===undefined) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;"); }
+
+  function loadVendors(){
+    try { return JSON.parse(localStorage.getItem(KEY_VENDORS)) || []; } catch (e) { return []; }
+  }
+  function saveVendors(vs){
+    localStorage.setItem(KEY_VENDORS, JSON.stringify(vs));
+    renderAll();
+  }
+  function loadItinerary(){
+    try { return JSON.parse(localStorage.getItem(KEY_ITINERARY)) || []; } catch (e) { return []; }
+  }
+  function saveItinerary(it){
+    localStorage.setItem(KEY_ITINERARY, JSON.stringify(it));
+    renderAll();
+  }
+
+  function loadSitePhotos(){
+    try { return JSON.parse(localStorage.getItem(KEY_SITE_PHOTOS)) || {}; } catch(e) { return {}; }
+  }
+  function saveSitePhotos(obj){
+    localStorage.setItem(KEY_SITE_PHOTOS, JSON.stringify(obj));
+  }
+
+  function avgRating(item){ if (!item.reviews || item.reviews.length === 0) return 0; return item.reviews.reduce((s,r)=>s+(r.rating||0),0)/item.reviews.length; }
+  function sortByRating(arr){ return arr.slice().sort((a,b)=> { const ra=avgRating(a), rb=avgRating(b); if (rb!==ra) return rb-ra; return (a.name||'').localeCompare(b.name||''); }); }
+
+  // Pages map
+  const pages = {};
+  ['landing','home','festival','food','stay','plan-trip','business'].forEach(id => pages[id] = document.getElementById(id));
+  function showPage(id){
+    Object.values(pages).forEach(p => p.classList.remove('active'));
+    if (pages[id]) pages[id].classList.add('active');
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  /*******************************
+   * Header controls & auth UI
+   *******************************/
+  const authOpenBtn = document.getElementById('authOpenBtn');
+  const authModal = document.getElementById('authModal');
+  const closeAuthModal = document.getElementById('closeAuthModal');
+  const googleLoginBtn = document.getElementById('googleLoginBtn');
+  const sendOtpBtn = document.getElementById('sendOtpBtn');
+  const phoneInput = document.getElementById('phoneInput');
+  const otpInput = document.getElementById('otpInput');
+  const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+  const mockLoginBtn = document.getElementById('mockLoginBtn');
+  const mockNameInput = document.getElementById('mockName');
+  const mockRoleSelect = document.getElementById('mockRole');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const userInfoEl = document.getElementById('userInfo');
+  const userNameSpan = document.getElementById('userName');
+
+  authOpenBtn.addEventListener('click', () => {
+    authModal.classList.remove('hidden');
+    if (useFirebase && !window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
+      } catch(e){}
+    }
+  });
+  closeAuthModal.addEventListener('click', () => authModal.classList.add('hidden'));
+
+  function localSignIn(name, role='visitor', phone=null){
+    const users = JSON.parse(localStorage.getItem(KEY_LOCAL_USERS) || '{}');
+    const uid = 'local_' + (Object.keys(users).length + 1) + '_' + Math.floor(Math.random()*90000);
+    users[uid] = { uid, name, role, phone };
+    localStorage.setItem(KEY_LOCAL_USERS, JSON.stringify(users));
+    currentUser = { uid, name, role, phone, isFirebase:false };
+    currentUserRole = role;
+    updateAuthUI();
+    renderAll();
+    authModal.classList.add('hidden');
+    return currentUser;
+  }
+
+  mockLoginBtn.addEventListener('click', () => {
+    const nm = mockNameInput.value.trim();
+    const role = mockRoleSelect.value;
+    if (!nm) return alert('Enter a name for local login.');
+    localSignIn(nm, role, null);
+  });
+
+  googleLoginBtn.addEventListener('click', async () => {
+    if (!useFirebase) return alert('Firebase not configured; use Local Sign In below.');
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const res = await firebaseAuth.signInWithPopup(provider);
+      const user = res.user;
+      const uDoc = firebaseDB.collection('users').doc(user.uid);
+      const doc = await uDoc.get();
+      if (!doc.exists) {
+        await uDoc.set({ uid: user.uid, name: user.displayName || null, email: user.email || null, role: 'visitor' }, { merge: true });
+      }
+      authModal.classList.add('hidden');
+    } catch (err) {
+      console.error('Google sign-in error', err);
+      alert('Google sign-in failed: ' + (err.message || err));
+    }
+  });
+
+  sendOtpBtn.addEventListener('click', async () => {
+    if (!useFirebase) return alert('Firebase not configured; use Local Sign In below.');
+    const phoneNumber = phoneInput.value.trim();
+    if (!phoneNumber) return alert('Enter phone number with country code (e.g. +91XXXXXXXXXX).');
+    try {
+      const appVerifier = window.recaptchaVerifier;
+      const confirmationResult = await firebaseAuth.signInWithPhoneNumber(phoneNumber, appVerifier);
+      window.confirmationResult = confirmationResult;
+      otpInput.classList.remove('hidden');
+      verifyOtpBtn.classList.remove('hidden');
+      alert('OTP sent. Enter it and press Verify OTP.');
+    } catch (err) {
+      console.error('SMS not sent', err);
+      alert('Failed to send OTP: ' + (err.message || err));
+    }
+  });
+
+  verifyOtpBtn.addEventListener('click', async () => {
+    if (!useFirebase) return alert('Firebase not configured; use Local Sign In below.');
+    const code = otpInput.value.trim();
+    if (!code) return alert('Enter OTP.');
+    try {
+      const res = await window.confirmationResult.confirm(code);
+      authModal.classList.add('hidden');
+      otpInput.classList.add('hidden');
+      verifyOtpBtn.classList.add('hidden');
+      phoneInput.value = '';
+      otpInput.value = '';
+    } catch (err) {
+      console.error('OTP verify failed', err);
+      alert('OTP verification failed: ' + (err.message || err));
+    }
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    if (useFirebase && firebaseAuth && currentUser && currentUser.isFirebase) {
+      await firebaseAuth.signOut();
+    } else {
+      currentUser = null;
+      currentUserRole = null;
+      updateAuthUI();
+      renderAll();
+    }
+  });
+
+  function updateAuthUI(){
+    if (currentUser) {
+      authOpenBtn.classList.add('hidden');
+      userInfoEl.classList.remove('hidden');
+      userNameSpan.textContent = currentUser.name || currentUser.phone || 'Me';
+      logoutBtn.classList.remove('hidden');
+    } else {
+      authOpenBtn.classList.remove('hidden');
+      userInfoEl.classList.add('hidden');
+      userNameSpan.textContent = '';
+      logoutBtn.classList.add('hidden');
+    }
+  }
+
+  if (useFirebase && firebaseAuth) {
+    firebaseAuth.onAuthStateChanged(async (u) => {
+      if (u) {
+        try {
+          const doc = await firebaseDB.collection('users').doc(u.uid).get();
+          let role = 'visitor';
+          if (doc.exists) role = doc.data().role || 'visitor';
+          else {
+            await firebaseDB.collection('users').doc(u.uid).set({ uid: u.uid, name: u.displayName || null, email: u.email || null, role: 'visitor' }, { merge: true });
+          }
+          currentUser = { uid: u.uid, name: u.displayName || u.phoneNumber || 'User', email: u.email || null, phone: u.phoneNumber || null, role, isFirebase:true };
+          currentUserRole = role;
+        } catch (err) {
+          console.error('Error fetching user doc', err);
+          currentUser = { uid: u.uid, name: u.displayName || u.phoneNumber || 'User', email: u.email || null, phone: u.phoneNumber || null, role: 'visitor', isFirebase:true };
+          currentUserRole = 'visitor';
+        }
+      } else {
+        currentUser = null;
+        currentUserRole = null;
+      }
+      updateAuthUI();
+      renderAll();
+    });
+  } else {
+    updateAuthUI();
+  }
+
+  /*******************************
+   * Business form - Google Maps pick / image / submit
+   *******************************/
+  const bizOpenMapsBtn = document.getElementById('biz-open-maps');
+  const bizUseMyLocBtn = document.getElementById('biz-use-my-location');
+  const bizCoordsInput = document.getElementById('biz-coords-input');
+  const confirmLocationBtn = document.getElementById('confirm-location-btn');
+  const clearLocationBtn = document.getElementById('clear-location-btn');
+  const bizCoordsDisplay = document.getElementById('biz-coords-display');
+
+  bizOpenMapsBtn.addEventListener('click', () => {
+    const mapsUrl = 'https://www.google.com/maps';
+    window.open(mapsUrl, '_blank');
+  });
+
+  let bizCoords = null; // {lat,lng}
+
+  bizUseMyLocBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation not supported by your browser');
+      return;
+    }
+    bizUseMyLocBtn.textContent = 'Locating...';
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+
+      bizCoordsInput.value = `${lat},${lng}`;
+      bizCoordsDisplay.textContent = `Picked coordinates: (${lat}, ${lng}) — click Confirm Location to lock in.`;
+
+      bizUseMyLocBtn.textContent = 'Use My Current Location';
+    },
+    err => {
+      alert('Unable to get location: ' + (err.message || err.code));
+      bizUseMyLocBtn.textContent = 'Use My Current Location';
+    },
+    { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+  confirmLocationBtn.addEventListener('click', () => {
+    const val = bizCoordsInput.value.trim();
+    if (!val) return alert('Paste coordinates (lat,lng) from Google Maps or use current location.');
+    const parts = val.split(',').map(s=>s.trim()).filter(Boolean);
+    if (parts.length < 2) return alert('Enter coordinates as "lat, lng".');
+    const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return alert('Invalid coordinates.');
+    bizCoords = { lat, lng };
+    bizCoordsDisplay.textContent = `Location confirmed: (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+    bizCoordsInput.readOnly = true;
+    confirmLocationBtn.disabled = true;
+    clearLocationBtn.disabled = false;
+  });
+
+  clearLocationBtn.addEventListener('click', () => {
+    bizCoords = null;
+    bizCoordsInput.value = '';
+    bizCoordsInput.readOnly = false;
+    bizCoordsDisplay.textContent = '';
+    confirmLocationBtn.disabled = false;
+    clearLocationBtn.disabled = false;
+  });
+
+  // Image preview & validation
+  const bizImageInput = document.getElementById('biz-image');
+  const bizImagePreview = document.getElementById('biz-image-preview');
+  const bizImageError = document.getElementById('biz-image-error');
+
+  bizImageInput.addEventListener('change', () => {
+    bizImageError.classList.add('hidden');
+    bizImagePreview.classList.add('hidden');
+    const f = bizImageInput.files && bizImageInput.files[0];
+    if (!f) return;
+    if (!['image/jpeg','image/png','image/jpg'].includes(f.type)) {
+      bizImageError.textContent = 'Invalid file type (only JPG/PNG).';
+      bizImageError.classList.remove('hidden');
+      bizImageInput.value = '';
+      return;
+    }
+    if (f.size > MAX_IMAGE_SIZE) {
+      bizImageError.textContent = 'File too large (max 2MB).';
+      bizImageError.classList.remove('hidden');
+      bizImageInput.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      bizImagePreview.src = reader.result;
+      bizImagePreview.classList.remove('hidden');
+    };
+    reader.readAsDataURL(f);
+  });
+
+  // Business form submit
+  const bizForm = document.getElementById('biz-form');
+  bizForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const category = document.getElementById('biz-category').value;
+    const name = document.getElementById('biz-name').value.trim();
+    const details = document.getElementById('biz-details').value.trim();
+    const file = bizImageInput.files && bizImageInput.files[0];
+    const availability = document.getElementById('biz-availability').value;
+    const offer = document.getElementById('biz-offer').value.trim();
+
+    if (!category || !name) { alert('Please fill category and name'); return; }
+    if (!file) { alert('Please upload an image'); return; }
+    if (!bizCoords) { alert('You must pick and confirm location using Google Maps or Use My Current Location.'); return; }
+    if (!currentUser) { alert('Please sign in to add a listing.'); return; }
+
+    // Upgrade user to vendor if necessary (local or firebase)
+    if ((currentUser.isFirebase && currentUserRole !== 'vendor')) {
+      if (!confirm('Your account is not a vendor. Upgrade to vendor?')) return;
+      try {
+        await firebaseDB.collection('users').doc(currentUser.uid).set({ role: 'vendor' }, { merge: true });
+        currentUserRole = 'vendor';
+        currentUser.role = 'vendor';
+        alert('Upgraded to vendor.');
+      } catch (err) {
+        console.error('Could not upgrade role', err);
+        alert('Could not upgrade role. Try again later.');
+        return;
+      }
+    } else if (!currentUser.isFirebase && currentUserRole !== 'vendor') {
+      if (!confirm('Your local account is not a vendor. Upgrade to vendor?')) return;
+      const users = JSON.parse(localStorage.getItem(KEY_LOCAL_USERS) || '{}');
+      if (users[currentUser.uid]) {
+        users[currentUser.uid].role = 'vendor';
+        localStorage.setItem(KEY_LOCAL_USERS, JSON.stringify(users));
+      }
+      currentUserRole = 'vendor';
+      currentUser.role = 'vendor';
+    }
+
+    try {
+      const b64 = await fileToBase64(file);
+      const vendors = loadVendors();
+      const newV = {
+        id: idNow(),
+        category,
+        name,
+        location: `${bizCoords.lat.toFixed(6)},${bizCoords.lng.toFixed(6)}`,
+        details,
+        imageData: b64,
+        reviews: [],
+        coords: { lat: bizCoords.lat, lng: bizCoords.lng },
+        ownerUid: currentUser.uid,
+        ownerName: currentUser.name || (currentUser.email || currentUser.phone) || 'Unknown',
+        createdAt: new Date().toISOString(),
+        availability: availability || 'available',
+        offerText: offer || '',
+        festivalDate: null,
+        ticketingEnabled: false
+      };
+      vendors.push(newV);
+      saveVendors(vendors);
+      bizForm.reset();
+      bizImagePreview.classList.add('hidden');
+      bizCoords = null;
+      bizCoordsInput.value = '';
+      bizCoordsInput.readOnly = false;
+      bizCoordsDisplay.textContent = '';
+      confirmLocationBtn.disabled = false;
+      clearLocationBtn.disabled = false;
+      renderManageVendors();
+      renderAll();
+      showPage('business');
+      alert('Listing added successfully!');
+    } catch (err) {
+      alert(String(err));
+    }
+  });
+
+  function fileToBase64(file){
+    return new Promise((resolve,reject) => {
+      if (!file) return reject('No file');
+      const allowed = ['image/jpeg','image/jpg','image/png'];
+      if (!allowed.includes(file.type)) return reject('Invalid file type. Only JPG/PNG allowed.');
+      if (file.size > MAX_IMAGE_SIZE) return reject('File too large (>2MB).');
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject('File read error');
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /*******************************
+   * Manage vendors display, pages, plan, reviews
+   *******************************/
+  function renderManageVendors(){
+    const container = document.getElementById('vendor-management-list');
+    const vendors = sortByRating(loadVendors());
+    container.innerHTML = '';
+    if (vendors.length === 0) {
+      container.innerHTML = '<div class="p-4 bg-white/80 rounded">No listings yet.</div>';
+      return;
+    }
+    vendors.slice().reverse().forEach(v => {
+      const div = document.createElement('div');
+      div.className = 'p-4 bg-white/80 rounded shadow';
+      const imgSrc = v.imageData || v.image || `https://source.unsplash.com/600x400/?${encodeURIComponent(v.category)}`;
+      const isOwner = currentUser && String(v.ownerUid) === String(currentUser.uid);
+      const availBadge = v.availability === 'available' ? '<span class="badge">Open</span>' : (v.availability === 'limited' ? '<span class="badge" style="background:#fde68a;color:#7c2d12">Limited</span>' : '<span class="badge" style="background:#fee2e2;color:#991b1b">Unavailable</span>');
+      const offerHtml = v.offerText ? `<div class="mt-2"><span class="offer-pill">${escapeHtml(v.offerText)}</span></div>` : '';
+      div.innerHTML = `
+        <div class="flex gap-4 items-start">
+          <img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(v.name)}" class="w-28 h-20 object-cover rounded">
+          <div class="flex-1">
+            <div class="flex justify-between">
+              <div>
+                <div class="font-semibold">${escapeHtml(v.name)} ${avgRating(v) ? `<span class="text-sm text-yellow-600">(${Math.round(avgRating(v)*10)/10}⭐)</span>` : ''}</div>
+                <div class="text-xs text-gray-600">${escapeHtml(v.category)} • ${escapeHtml(v.location)}${v.coords ? ` • (${v.coords.lat.toFixed(3)},${v.coords.lng.toFixed(3)})` : ''}</div>
+                <div class="text-xs text-gray-500">Uploaded by: ${escapeHtml(v.ownerName || 'Unknown')}</div>
+                <div class="mt-1">${availBadge}</div>
+                ${offerHtml}
+              </div>
+              <div>
+                <button class="text-xs px-2 py-1 border rounded text-gray-600 vendor-qr-btn" data-id="${v.id}">Show QR</button>
+                ${isOwner ? `
+                  <div style="margin-top:6px">
+                    <button class="text-xs px-2 py-1 border rounded text-gray-700 edit-btn" data-id="${v.id}">Edit</button>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+            <div class="text-sm mt-2">${escapeHtml(v.details)}</div>
+            <div class="mt-3">
+              <div id="reviews-display-${v.id}" class="space-y-2"></div>
+              <div class="mt-2 text-xs text-gray-500">Reviews (visitors only)</div>
+            </div>
+          </div>
+        </div>
+      `;
+      container.appendChild(div);
+
+      const revCon = div.querySelector(`#reviews-display-${v.id}`);
+      // Render reviews
+      if (v.reviews && v.reviews.length) {
+        v.reviews.slice().reverse().forEach(r => {
+          const rdiv = document.createElement('div');
+          rdiv.className = 'p-2 bg-gray-50 border rounded';
+          let imgsHtml = '';
+          if (r.images && r.images.length) {
+            imgsHtml = `<div style="display:flex;gap:6px;margin-top:6px;">${r.images.map(src => `<img src="${escapeHtml(src)}" style="width:80px;height:60px;object-fit:cover;border-radius:6px">`).join('')}</div>`;
+          }
+          rdiv.innerHTML = `<div><b>${'⭐'.repeat(r.rating)}</b> <span class="text-xs text-gray-500 ml-2">${escapeHtml(r.date||'')}</span> • <span class="text-xs text-gray-500 ml-2">by ${escapeHtml(r.authorName||'Guest')}</span></div><div class="mt-1 text-sm">${escapeHtml(r.text)}</div>${imgsHtml}`;
+          revCon.appendChild(rdiv);
+        });
+      }
+
+      // Owner-only buttons
+      const editBtn = div.querySelector('.edit-btn');
+      const qrBtn = div.querySelector('.vendor-qr-btn');
+
+      if (editBtn) {
+        editBtn.addEventListener('click', function(){
+          openVendorEditModal(this.dataset.id);
+        });
+      }
+      
+      // FIX: Cleaned up QR button logic. Removed call to a non-existent function.
+      if (qrBtn) {
+        qrBtn.addEventListener('click', function(){
+            const vid = this.dataset.id;
+            const code = `VND-${vid}`;
+            const panel = document.createElement('div');
+            panel.className = 'modal-backdrop';
+            panel.innerHTML = `<div class="modal-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <h3 style="font-weight:700">Vendor QR</h3>
+                <button id="closeVnd" style="background:#ef4444;color:white;padding:6px 10px;border-radius:6px;border:0;cursor:pointer">Close</button>
+              </div>
+              <div style="margin-top:12px;text-align:center">
+                <div style="font-weight:600;margin-bottom:8px">${escapeHtml(v.name)}</div>
+                <div style="background:#111;color:white;padding:18px;border-radius:8px;display:inline-block">${escapeHtml(code)}</div>
+                <div style="margin-top:12px;font-size:13px;color:#444">Scan this code with the scanner to open vendor details.</div>
+              </div>
+            </div>`;
+            document.body.appendChild(panel);
+            panel.querySelector('#closeVnd').addEventListener('click', ()=>panel.remove());
+        });
+      }
+    });
+  }
+
+  // Category pages render
+  function renderCategoryPages(){
+    const vendors = loadVendors();
+    const map = { Festival:'festival-list', Food:'food-list', Stay:'stay-list' };
+    Object.values(map).forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ''; });
+    const sorted = sortByRating(vendors);
+    sorted.forEach(v => {
+      const target = map[v.category];
+      if (!target) return;
+      const container = document.getElementById(target);
+      const col = document.createElement('div');
+      col.className = 'p-4 md:w-1/3';
+      const img = v.imageData
+        ? `<img src="${escapeHtml(v.imageData)}" class="lg:h-48 md:h-36 w-full object-cover rounded" alt="">`
+        : v.image
+          ? `<img src="${escapeHtml(v.image)}" class="lg:h-48 md:h-36 w-full object-cover rounded" alt="">`
+          : `<img src="https://source.unsplash.com/400x250/?${encodeURIComponent(v.category)}" class="lg:h-48 md:h-36 w-full object-cover rounded" alt="">`;
+      const rating = Math.round(avgRating(v)*10)/10;
+      const avail = v.availability === 'available' ? '<span class="badge">Open</span>' : (v.availability === 'limited' ? '<span class="badge" style="background:#fde68a;color:#7c2d12">Limited</span>' : '<span class="badge" style="background:#fee2e2;color:#991b1b">Unavailable</span>');
+      const offer = v.offerText ? `<div class="mt-2"><span class="offer-pill">${escapeHtml(v.offerText)}</span></div>` : '';
+      col.innerHTML = `
+        <div class="h-full border-2 border-gray-200 border-opacity-60 rounded-lg overflow-hidden bg-white/80 p-4">
+          ${img}
+          <div class="mt-3 flex items-start justify-between">
+            <div>
+              <h2 class="tracking-widest text-xs font-medium text-gray-400">${escapeHtml(v.category)}</h2>
+              <h1 class="text-lg font-medium text-gray-900 mb-1 category-card-title" data-id="${v.id}" style="cursor:pointer">${escapeHtml(v.name)} ${rating ? `<span class="text-sm text-yellow-600">(${rating}⭐)</span>` : ''}</h1>
+              <div class="text-sm text-gray-600">${escapeHtml(v.location)}${v.coords ? ` • (${v.coords.lat.toFixed(3)},${v.coords.lng.toFixed(3)})` : ''}</div>
+            </div>
+            <div class="text-right">${avail}</div>
+          </div>
+          <p class="leading-relaxed mb-3 mt-2">${escapeHtml(v.details)}</p>
+          ${offer}
+          <div class="flex items-center justify-between mt-3">
+            <div class="flex gap-2">
+              <button class="text-indigo-500 add-to-plan-small" data-id="${v.id}">Add to Plan</button>
+              <button class="text-gray-700 text-sm view-nearby" data-id="${v.id}">Nearby</button>
+              <button class="text-gray-700 text-sm open-vendor" data-id="${v.id}">Open</button>
+            </div>
+          </div>
+        </div>
+      `;
+      container.appendChild(col);
+    });
+
+    document.querySelectorAll('.add-to-plan-small').forEach(btn => btn.addEventListener('click', function(){ addToItinerary(this.dataset.id); }));
+    document.querySelectorAll('.view-nearby').forEach(btn => btn.addEventListener('click', function(){ showNearbyFrom(this.dataset.id); }));
+    document.querySelectorAll('.open-vendor').forEach(btn => btn.addEventListener('click', function(){ openVendorModal(this.dataset.id); }));
+    document.querySelectorAll('.category-card-title').forEach(el => el.addEventListener('click', function(){ openVendorModal(this.dataset.id); }));
+  }
+
+  // Nearby logic
+  function showNearbyFrom(vId){
+    const vendors = loadVendors();
+    const source = vendors.find(v => String(v.id) === String(vId));
+    if (!source) { alert('Source not found'); return; }
+    const candidates = vendors.filter(v => (v.category === 'Food' || v.category === 'Stay') && String(v.id) !== String(vId));
+    let results = [];
+    if (source.coords) {
+      candidates.forEach(c => { if (c.coords) { const d = haversineKm(source.coords.lat, source.coords.lng, c.coords.lat, c.coords.lng); results.push({ vendor: c, distanceKm: d }); } });
+      results = results.sort((a,b) => a.distanceKm - b.distanceKm);
+    }
+    if (results.length === 0) {
+      candidates.forEach(c => { if (source.location && c.location && c.location.toLowerCase().includes(source.location.toLowerCase())) results.push({ vendor: c, distanceKm: null }); });
+    }
+    if (results.length === 0) {
+      const top = sortByRating(candidates).slice(0,6);
+      results = top.map(v => ({ vendor: v, distanceKm: null }));
+    }
+
+    const panel = document.createElement('div');
+    panel.className = 'modal-backdrop';
+    panel.innerHTML = `<div class="modal-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="font-weight:700">Nearby Food & Stay from "${escapeHtml(source.name)}"</h3>
+        <button id="closeNearby" style="background:#ef4444;color:white;padding:6px 10px;border-radius:6px;border:0;cursor:pointer">Close</button>
+      </div><div style="margin-top:12px;"></div>
+      <div id="nearby-list"></div>
+    </div>`;
+    document.body.appendChild(panel);
+    const listWrap = panel.querySelector('#nearby-list');
+    results.forEach(r => {
+      const v = r.vendor;
+      const rating = Math.round(avgRating(v)*10)/10;
+      const dText = r.distanceKm !== null ? `${r.distanceKm.toFixed(2)} km` : (v.location ? v.location : '');
+      const card = document.createElement('div');
+      card.style.display = 'flex';
+      card.style.gap = '12px';
+      card.style.padding = '10px';
+      card.style.borderBottom = '1px solid #eee';
+      const img = v.imageData || v.image || `https://source.unsplash.com/200x140/?${encodeURIComponent(v.category)}`;
+      card.innerHTML = `<img src="${escapeHtml(img)}" style="width:120px;height:80px;object-fit:cover;border-radius:6px">
+                        <div style="flex:1">
+                          <div style="font-weight:600">${escapeHtml(v.name)} ${rating ? `<span style="color:#b45309;font-weight:600">(${rating}⭐)</span>` : ''}</div>
+                          <div style="font-size:13px;color:#666;margin-top:4px">${escapeHtml(v.details)}</div>
+                          <div style="font-size:12px;color:#444;margin-top:6px">${escapeHtml(dText)}</div>
+                          <div style="margin-top:8px">
+                            <button data-id="${v.id}" class="add-plan-inline" style="background:#2563eb;color:white;padding:6px 10px;border-radius:6px;border:0;cursor:pointer">Add to Plan</button>
+                            <a style="margin-left:8px;color:#1d4ed8;text-decoration:underline;cursor:pointer" href="${v.coords ? `https://www.google.com/maps/search/?api=1&query=${v.coords.lat},${v.coords.lng}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.location||'')}`}" target="_blank">Open in Maps</a>
+                          </div>
+                        </div>`;
+      listWrap.appendChild(card);
+    });
+
+    panel.querySelector('#closeNearby').addEventListener('click', () => panel.remove());
+    panel.querySelectorAll('.add-plan-inline').forEach(btn => btn.addEventListener('click', function(){ addToItinerary(this.dataset.id); this.textContent = 'Added'; this.disabled = true; }));
+  }
+
+  // Plan rendering
+  function renderPlanAll(){
+    const vendors = loadVendors();
+    const allContainer = document.getElementById('all-vendors-list');
+    const itineraryContainer = document.getElementById('itinerary-container');
+    allContainer.innerHTML = '';
+    itineraryContainer.innerHTML = '';
+
+    const filterValue = document.getElementById('filter-cat').value || 'all';
+    const filtered = vendors.filter(v => filterValue === 'all' ? true : v.category === filterValue);
+    const sorted = sortByRating(filtered);
+
+    if (sorted.length === 0) {
+      allContainer.innerHTML = `<div class="p-3 bg-white/80 rounded">No vendors found for "${escapeHtml(filterValue)}".</div>`;
+    } else {
+      sorted.forEach(v => {
+        const el = document.createElement('div');
+        el.className = 'p-3 bg-white/80 rounded flex items-start gap-3';
+        const thumb = v.imageData || v.image || `https://source.unsplash.com/120x90/?${encodeURIComponent(v.category)}`;
+        const rating = Math.round(avgRating(v)*10)/10;
+        el.innerHTML = `
+          <img src="${escapeHtml(thumb)}" class="w-28 h-20 object-cover rounded" alt="">
+          <div class="flex-1">
+            <div class="flex justify-between">
+              <div>
+                <div class="font-semibold">${escapeHtml(v.name)} ${rating ? `<span class="text-sm text-yellow-600">(${rating}⭐)</span>` : ''}</div>
+                <div class="text-xs text-gray-600">${escapeHtml(v.category)} • ${escapeHtml(v.location)}${v.coords ? ` (${v.coords.lat.toFixed(3)},${v.coords.lng.toFixed(3)})` : ''}</div>
+              </div>
+              <div><button class="bg-indigo-500 text-white px-3 py-1 rounded add-plan-btn" data-id="${v.id}">Add</button></div>
+            </div>
+            <div class="text-sm mt-2">${escapeHtml(v.details)}</div>
+          </div>
+        `;
+        allContainer.appendChild(el);
+      });
+
+      allContainer.querySelectorAll('.add-plan-btn').forEach(btn => btn.addEventListener('click', function(){ addToItinerary(this.dataset.id); }));
+    }
+
+    const itinerary = loadItinerary();
+    const itineraryVendors = itinerary.map(id => loadVendors().find(v => String(v.id) === String(id))).filter(Boolean);
+    if (itineraryVendors.length === 0) {
+      itineraryContainer.innerHTML = `<div class="p-3 bg-white/80 rounded">Your itinerary is empty — add items.</div>`;
+    } else {
+      itineraryVendors.forEach(v => {
+        const el = document.createElement('div');
+        el.className = 'p-3 bg-white/80 rounded flex justify-between items-center';
+        el.innerHTML = `
+          <div>
+            <div class="font-semibold">${escapeHtml(v.name)}</div>
+            <div class="text-xs text-gray-600">${escapeHtml(v.category)} • ${escapeHtml(v.location)}</div>
+          </div>
+          <div><button class="bg-red-500 text-white px-2 py-1 rounded remove-from-itinerary" data-id="${v.id}">Remove</button></div>
+        `;
+        itineraryContainer.appendChild(el);
+      });
+
+      itineraryContainer.querySelectorAll('.remove-from-itinerary').forEach(btn => btn.addEventListener('click', function(){ removeFromItinerary(this.dataset.id); }));
+    }
+
+    // Render festival-only plans (from stored plan list or generated)
+    renderFestivalPlans();
+  }
+
+  function addToItinerary(vId){
+    const vendors = loadVendors();
+    const found = vendors.find(x => String(x.id) === String(vId));
+    if (!found) { alert('Vendor not found'); return; }
+    const it = loadItinerary();
+    if (it.find(x => String(x) === String(vId))) { alert('Already in itinerary'); return; }
+    it.push(vId);
+    saveItinerary(it);
+    renderPlanAll();
+    renderHomeItinerary();
+  }
+  function removeFromItinerary(vId){
+    let it = loadItinerary();
+    it = it.filter(x => String(x) !== String(vId));
+    saveItinerary(it);
+    renderPlanAll();
+    renderHomeItinerary();
+  }
+
+  document.getElementById('clear-itinerary').addEventListener('click', () => {
+    if (!confirm('Clear your itinerary?')) return;
+    saveItinerary([]);
+    renderPlanAll(); renderHomeItinerary();
+  });
+  document.getElementById('filter-cat').addEventListener('change', () => renderPlanAll());
+
+  function renderHomeItinerary(){
+    const itCon = document.getElementById('home-itinerary');
+    const it = loadItinerary();
+    itCon.innerHTML = '';
+    if (it.length === 0) { itCon.innerHTML = '<div class="text-sm text-gray-600">No items saved.</div>'; return; }
+    const vendors = loadVendors();
+    it.forEach(id => {
+      const v = vendors.find(x => String(x.id) === String(id));
+      if (!v) return;
+      const div = document.createElement('div');
+      div.className = 'p-2 bg-white/80 rounded mb-2 flex justify-between items-center';
+      div.innerHTML = `<div class="text-sm">${escapeHtml(v.name)} <span class="text-xs text-gray-500">(${escapeHtml(v.category)})</span></div>
+                       <button class="text-xs text-red-500 remove-it" data-id="${v.id}">Remove</button>`;
+      itCon.appendChild(div);
+      div.querySelector('.remove-it').addEventListener('click', () => removeFromItinerary(v.id));
+    });
+  }
+
+  // Vendor modal with reviews and Add-to-Itinerary
+  function openVendorModal(vId){
+    const vendors = loadVendors();
+    const v = vendors.find(x => String(x.id) === String(vId));
+    if (!v) return;
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    
+    // FIX: Corrected a major bug where JavaScript code was incorrectly placed inside the HTML string.
+    // The logic to add event listeners is now run *after* the modal is added to the page.
+    modal.innerHTML = `<div class="modal-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h3 style="font-weight:700">${escapeHtml(v.name)} ${Math.round(avgRating(v)*10)/10 ? `<span style="color:#b45309">(${Math.round(avgRating(v)*10)/10}⭐)</span>` : ''}</h3>
+          <div style="font-size:13px;color:#666">${escapeHtml(v.category)} • ${escapeHtml(v.location)}${v.coords ? ` • (${v.coords.lat.toFixed(3)},${v.coords.lng.toFixed(3)})` : ''}</div>
+        </div>
+        <div><button id="closeModalBtn" style="background:#ef4444;color:white;padding:6px 10px;border-radius:6px;border:0;cursor:pointer">Close</button></div>
+      </div>
+      <div style="margin-top:12px;">
+      <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
+        <img src="${escapeHtml(v.imageData || v.image || `https://source.unsplash.com/400x250/?${encodeURIComponent(v.category)}`)}" style="width:240px;height:160px;object-fit:cover;border-radius:6px">
+        <div style="flex:1; min-width: 300px;">
+          <div style="color:#333">${escapeHtml(v.details)}</div>
+        
+          <!-- Extra photos gallery -->
+          <div id="vendor-extra-gallery" style="margin-top:12px"></div>
+
+          <div id="modal-reviews" style="margin-top:12px"></div>
+          <div style="margin-top:12px">
+            <div id="modal-stars" style="display:flex;gap:6px">${[1,2,3,4,5].map(n => `<span class="star" data-value="${n}" style="font-size:22px;cursor:pointer">&#9733;</span>`).join('')}</div>
+            <textarea id="modal-review-text" placeholder="Write your review..." style="width:100%;height:80px;margin-top:8px;padding:8px;border:1px solid #ddd;border-radius:6px"></textarea>
+            <div style="margin-top:8px">
+              <input id="modal-review-images" type="file" accept="image/*" multiple style="display:block;margin-bottom:8px" />
+              <button id="modal-submit-review" style="background:#16a34a;color:white;padding:8px 12px;border-radius:6px;border:0;cursor:pointer">Submit Review</button>
+            </div>
+            <div class="mt-3"><button id="modal-add-to-itinerary" data-id="${v.id}" style="background:#2563eb;color:white;padding:8px 12px;border-radius:6px;border:0;cursor:pointer">Add to Itinerary</button></div>
+            <div class="mt-3"><a href="${v.coords ? `https://www.google.com/maps/search/?api=1&query=${v.coords.lat},${v.coords.lng}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.location||'')}`}" target="_blank" style="color:#1d4ed8; text-decoration:underline">Open in Google Maps</a></div>
+            <div class="mt-2"><span class="text-sm text-gray-500">Availability:</span> ${v.availability ? `<strong class="ml-2">${escapeHtml(v.availability)}</strong>` : '<strong class="ml-2">available</strong>'}</div>
+            ${v.offerText ? `<div class="mt-2"><span class="offer-pill">${escapeHtml(v.offerText)}</span></div>` : ''}
+            ${currentUser && String(currentUser.uid) === String(v.ownerUid) ? `
+              <div class="mt-2">
+                <button id="modal-edit-listing" style="background:#111827;color:white;padding:8px 12px;border-radius:6px;border:0;cursor:pointer">Edit Listing</button>
+              </div>` : ''}
+            </div>
+        </div>
+      </div>
+    </div></div>`;
+    document.body.appendChild(modal);
+    
+    // Add event listener for edit button (if it exists)
+    const meb = modal.querySelector('#modal-edit-listing');
+    if (meb) {
+      meb.addEventListener('click', () => {
+        modal.remove();
+        openVendorEditModal(v.id);
+      });
+    }
+
+    const gallery = modal.querySelector('#vendor-extra-gallery');
+    if (gallery) {
+      const imgs = Array.isArray(v.additionalImages) ? v.additionalImages : [];
+      if (imgs.length) {
+        const wrap = document.createElement('div');
+        wrap.style.display = 'flex';
+        wrap.style.flexWrap = 'wrap';
+        wrap.style.gap = '8px';
+        imgs.forEach(src => {
+          const im = document.createElement('img');
+          im.src = src;
+          im.alt = 'Extra';
+          im.style.width = '120px';
+          im.style.height = '80px';
+          im.style.objectFit = 'cover';
+          im.style.borderRadius = '6px';
+          wrap.appendChild(im);
+        });
+        const title = document.createElement('div');
+        title.textContent = 'Photos';
+        title.style.fontWeight = '600';
+        title.style.margin = '12px 0 6px';
+        gallery.appendChild(title);
+        gallery.appendChild(wrap);
+      }
+    }
+
+    const revWrap = modal.querySelector('#modal-reviews');
+    if (v.reviews && v.reviews.length) {
+      v.reviews.slice().reverse().forEach(r => {
+        const d = document.createElement('div');
+        d.style.padding='8px'; d.style.borderBottom='1px solid #eee';
+        let imgsHtml = '';
+        if (r.images && r.images.length) {
+          imgsHtml = `<div style="display:flex;gap:8px;margin-top:8px;">${r.images.map(i => `<img src="${escapeHtml(i)}" style="width:120px;height:80px;object-fit:cover;border-radius:6px">`).join('')}</div>`;
+        }
+        d.innerHTML = `<div style="font-weight:600">${'⭐'.repeat(r.rating)} <span style="font-size:12px;color:#666;margin-left:8px">${escapeHtml(r.date||'')}</span> • <span style="font-size:12px;color:#666;margin-left:8px">by ${escapeHtml(r.authorName||'Guest')}</span></div><div style="margin-top:6px">${escapeHtml(r.text)}</div>${imgsHtml}`;
+        revWrap.appendChild(d);
+      });
+    } else {
+      revWrap.innerHTML = '<div style="color:#666">No reviews yet.</div>';
+    }
+
+    modal.querySelector('#closeModalBtn').addEventListener('click', () => modal.remove());
+    modal.querySelectorAll('#modal-stars .star').forEach(s => s.addEventListener('click', function(){
+      modal.querySelectorAll('#modal-stars .star').forEach(x=>x.classList.remove('selected'));
+      this.classList.add('selected');
+    }));
+
+    modal.querySelector('#modal-submit-review').addEventListener('click', async () => {
+      if (!currentUser) {
+        alert('Please sign in to submit a review (Sign Up / Login).');
+        return;
+      }
+      const sel = modal.querySelector('#modal-stars .star.selected');
+      if (!sel) return alert('Select a rating');
+      const rating = parseInt(sel.dataset.value);
+      const text = modal.querySelector('#modal-review-text').value.trim();
+      const files = modal.querySelector('#modal-review-images').files;
+      const vendorsNow = loadVendors();
+      const idx = vendorsNow.findIndex(x => String(x.id) === String(vId));
+      if (idx === -1) return alert('Vendor not found');
+      let images = [];
+      if (files && files.length) {
+        for (let i=0;i<files.length;i++){
+          const f = files[i];
+          try {
+            const b = await fileToBase64(f);
+            images.push(b);
+          } catch(e){
+            console.warn('Skipping image', e);
+          }
+        }
+      }
+      if (!vendorsNow[idx].reviews) vendorsNow[idx].reviews = [];
+      vendorsNow[idx].reviews.push({ rating, text, date: new Date().toLocaleString(), authorUid: currentUser.uid, authorName: (currentUser.name || currentUser.phone || 'Anonymous'), images });
+      saveVendors(vendorsNow);
+      modal.remove();
+      renderAll();
+    });
+
+    modal.querySelector('#modal-add-to-itinerary').addEventListener('click', function(){
+      addToItinerary(this.dataset.id);
+      alert('Added to itinerary.');
+    });
+  }
+
+  // Utility: haversine
+  function haversineKm(lat1, lon1, lat2, lon2){
+    const toRad = x => x * Math.PI / 180;
+    const R = 6371;
+    const dLat = toRad(lat2-lat1);
+    const dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
+  // Bootstrapping: **NO sample vendor data** per your request
+  function ensureSampleData(){
+    // Ensure keys exist but do NOT pre-populate sample vendors or sample itinerary.
+    if (!localStorage.getItem(KEY_VENDORS)) localStorage.setItem(KEY_VENDORS, JSON.stringify([]));
+    if (!localStorage.getItem(KEY_ITINERARY)) localStorage.setItem(KEY_ITINERARY, JSON.stringify([]));
+    if (!localStorage.getItem('tickets')) localStorage.setItem('tickets', JSON.stringify([]));
+    // ensure site photos object exists
+    if (!localStorage.getItem(KEY_SITE_PHOTOS)) saveSitePhotos({});
+  }
+
+  /*******************************
+   * Landing / UI wiring / mode
+   *******************************/
+  document.getElementById('visitorModeBtn').addEventListener('click', () => enterMode('visitor'));
+  document.getElementById('businessModeBtn').addEventListener('click', () => enterMode('business'));
+  document.getElementById('switchMode').addEventListener('click', () => { const next = (appMode === 'business') ? 'visitor' : 'business'; enterMode(next); });
+  document.getElementById('openLanding').addEventListener('click', () => showPage('landing'));
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    document.body.classList.toggle('dark-mode');
+    if (document.body.classList.contains('dark-mode')) {
+      document.body.classList.remove('bg-white','text-gray-900');
+      document.body.classList.add('bg-black','text-white');
+    } else {
+      document.body.classList.remove('bg-black','text-white');
+      document.body.classList.add('bg-white','text-gray-900');
+    }
+  });
+
+  document.querySelectorAll('.nav-link').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    const t = e.target.dataset.target;
+    if (!t) return;
+    if (appMode !== 'visitor') enterMode('visitor');
+    showPage(t);
+  }));
+
+  function enterMode(mode){
+    appMode = mode;
+    localStorage.setItem('ud_mode', mode);
+    if (mode === 'visitor'){
+      setHeaderForVisitor();
+      showVisitorUI();
+    } else {
+      setHeaderForBusiness();
+      showBusinessUI();
+    }
+  }
+
+  function setHeaderForVisitor(){ document.getElementById('topNav').classList.remove('hidden'); document.getElementById('visitorModeBtn').classList.add('pill-active'); document.getElementById('businessModeBtn').classList.remove('pill-active'); }
+  function setHeaderForBusiness(){ document.getElementById('topNav').classList.add('hidden'); document.getElementById('businessModeBtn').classList.add('pill-active'); document.getElementById('visitorModeBtn').classList.remove('pill-active'); }
+  function showVisitorUI(){ showPage('home'); renderAll(); }
+  function showBusinessUI(){ showPage('business'); renderManageVendors(); }
+
+  function renderAll(){
+    applySitePhotosToUI();
+    renderCategoryPages();
+    renderPlanAll();
+    renderHomeItinerary();
+    renderManageVendors();
+    updateAuthUI();
+    renderAdminHeaderState();
+  }
+
+  /*******************************
+   * Festival AI plan & plans list
+   *******************************/
+  const aiFestivalPlanBtn = document.getElementById('aiFestivalPlan');
+  aiFestivalPlanBtn.addEventListener('click', () => {
+    const vendors = loadVendors();
+    const festivals = vendors.filter(v => v.category === 'Festival');
+    if (!festivals || festivals.length === 0) return alert('No festival entries available to create a plan.');
+    const planId = 'plan_' + Math.floor(Math.random()*900000 + 100000);
+    const payload = (JSON.parse(localStorage.getItem('ud_festival_plans') || '{}'));
+    payload[planId] = { id: planId, name: `Festivals Plan (${new Date().toLocaleDateString()})`, items: festivals.map(f=>String(f.id)), createdAt: new Date().toISOString() };
+    localStorage.setItem('ud_festival_plans', JSON.stringify(payload));
+    alert('Festival-only plan created. See it under Plan Trip → Festival-only Plans.');
+    renderFestivalPlans();
+    showPage('plan-trip');
+  });
+
+  function renderFestivalPlans(){
+    const wrap = document.getElementById('festival-plans');
+    wrap.innerHTML = '';
+    const payload = (JSON.parse(localStorage.getItem('ud_festival_plans') || '{}'));
+    const keys = Object.keys(payload || {});
+    if (!keys.length) { wrap.innerHTML = '<div class="text-sm text-gray-600">No festival plans yet. Use "AI Plan: Festivals Only".</div>'; return; }
+    keys.forEach(k => {
+      const p = payload[k];
+      const div = document.createElement('div');
+      div.className = 'p-2 bg-white rounded flex items-center justify-between';
+      div.innerHTML = `<div>
+          <div class="font-semibold">${escapeHtml(p.name)}</div>
+          <div class="text-xs text-gray-600">${new Date(p.createdAt).toLocaleString()}</div>
+        </div>
+        <div class="flex flex-col gap-2">
+          <button class="px-2 py-1 bg-indigo-600 text-white rounded view-festival-plan" data-id="${p.id}">Open</button>
+          <button class="px-2 py-1 bg-gray-200 rounded delete-festival-plan text-xs" data-id="${p.id}">Delete</button>
+        </div>`;
+      wrap.appendChild(div);
+    });
+    document.querySelectorAll('.view-festival-plan').forEach(b => b.addEventListener('click', function(){
+      const pid = this.dataset.id;
+      openFestivalPlanModal(pid);
+    }));
+    document.querySelectorAll('.delete-festival-plan').forEach(b => b.addEventListener('click', function(){
+      const pid = this.dataset.id;
+      if (!confirm('Delete this festival plan?')) return;
+      const payload = JSON.parse(localStorage.getItem('ud_festival_plans') || '{}');
+      delete payload[pid];
+      localStorage.setItem('ud_festival_plans', JSON.stringify(payload));
+      renderFestivalPlans();
+    }));
+  }
+
+  function openFestivalPlanModal(planId){
+    const payload = JSON.parse(localStorage.getItem('ud_festival_plans') || '{}');
+    const p = payload[planId];
+    if (!p) return alert('Plan not found');
+    const vendors = loadVendors();
+    const festivalItems = p.items.map(id => vendors.find(v => String(v.id) === String(id))).filter(Boolean);
+
+    const panel = document.createElement('div');
+    panel.className = 'modal-backdrop';
+    panel.innerHTML = `<div class="modal-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="font-weight:700">${escapeHtml(p.name)}</h3>
+        <button id="closePlanModal" style="background:#ef4444;color:white;padding:6px 10px;border-radius:6px;border:0;cursor:pointer">Close</button>
+      </div>
+      <div id="plan-items" style="margin-top:12px;max-height:60vh;overflow:auto;"></div>
+    </div>`;
+    document.body.appendChild(panel);
+    const listWrap = panel.querySelector('#plan-items');
+    festivalItems.forEach(f => {
+      const card = document.createElement('div');
+      card.style.borderBottom = '1px solid #eee';
+      card.style.padding = '10px';
+      card.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:600">${escapeHtml(f.name)}</div>
+            <div style="font-size:13px;color:#666">${escapeHtml(f.details)}</div>
+            <div style="font-size:12px;color:#444;margin-top:6px">${f.coords ? `(${f.coords.lat.toFixed(6)}, ${f.coords.lng.toFixed(6)})` : escapeHtml(f.location || '')}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="show-festival-nearby px-2 py-1 bg-indigo-500 text-white rounded" data-id="${f.id}">Nearby Food & Stay</button>
+            <a class="open-in-maps px-2 py-1 bg-gray-200 rounded text-xs" target="_blank" href="${f.coords ? `https://www.google.com/maps/search/?api=1&query=${f.coords.lat},${f.coords.lng}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.location||'')}`}">Open in Google Maps</a>
+          </div>
+        </div>`;
+      listWrap.appendChild(card);
+    });
+
+    panel.querySelector('#closePlanModal').addEventListener('click', () => panel.remove());
+    panel.querySelectorAll('.show-festival-nearby').forEach(btn => btn.addEventListener('click', function(){
+      const id = this.dataset.id;
+      showNearbyFrom(id);
+    }));
+  }
+
+  /*******************************
+   * Ticketing (mock) & Scanner integration
+   *******************************/
+  // ticket modal open/close wiring
+  const ticketModal = document.getElementById('ticketModal');
+  document.getElementById('openTicketFlow').addEventListener('click', () => ticketModal.classList.remove('hidden'));
+  document.getElementById('closeTicketModal').addEventListener('click', () => ticketModal.classList.add('hidden'));
+
+  // buy ticket
+  document.getElementById('buyTicketBtn').addEventListener('click', () => {
+    const eventName = document.getElementById('ticket-event').value.trim() || 'Festival Event';
+    const buyer = document.getElementById('ticket-name').value.trim() || 'Guest';
+    const phone = document.getElementById('ticket-phone').value.trim() || '';
+    const type = document.getElementById('ticket-type').value;
+    const qty = parseInt(document.getElementById('ticket-qty').value) || 1;
+    const id = 'TKT-' + Math.floor(Math.random()*900000 + 100000);
+
+    // Save ticket to localStorage (with used:false)
+    let tickets = JSON.parse(localStorage.getItem("tickets")) || [];
+    tickets.push({id, buyer, eventName, type, qty, used:false});
+    localStorage.setItem("tickets", JSON.stringify(tickets));
+
+    const resultDiv = document.getElementById('ticket-result');
+    const qrHtml = `
+      <div style="display:flex;gap:12px;align-items:center;">
+        <div class="qr-mock">QR: ${id}</div>
+        <div>
+          <div><strong>Ticket:</strong> ${escapeHtml(id)}</div>
+          <div><strong>Event:</strong> ${escapeHtml(eventName)}</div>
+          <div><strong>Name:</strong> ${escapeHtml(buyer)}</div>
+          <div><strong>Type:</strong> ${escapeHtml(type)} • <strong>Qty:</strong> ${qty}</div>
+          <div style="margin-top:8px;"><button id="download-ticket"
+            class="bg-green-600 text-white px-3 py-1 rounded">Save</button></div>
+        </div>
+      </div>`;
+    resultDiv.innerHTML = qrHtml;
+    document.getElementById('download-ticket')?.addEventListener('click', ()=> {
+      alert('Mock ticket saved (demo). You can also show this code at the gate for scanning: ' + id);
+    });
+  });
+
+  // WebAudio tones (success / error) — avoids external audio files
+  const audioCtx = (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') ? new (window.AudioContext || window.webkitAudioContext)() : null;
+  function playSuccessTone(){
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = 980;
+    g.gain.value = 0.0001; // start very low
+    o.connect(g); g.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+    o.frequency.setValueAtTime(980, now);
+    o.frequency.exponentialRampToValueAtTime(1320, now + 0.12);
+    o.start(now);
+    setTimeout(()=>{ g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.04); o.stop(audioCtx.currentTime + 0.05); }, 220);
+  }
+  function playErrorTone(){
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'square';
+    o.frequency.value = 240;
+    o.connect(g); g.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.25, now + 0.01);
+    o.start(now);
+    setTimeout(()=>{ g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.02); o.stop(audioCtx.currentTime + 0.03); }, 300);
+  }
+
+  // Scanner logic using html5-qrcode
+  let html5QrCodeInstance = null;
+  let scannerRunning = false;
+
+  function openScannerModal(){
+    // Block scanner for admin users
+    if (isAdminLoggedIn) { alert('Scanner is not available in Admin mode.'); return; }
+    document.getElementById('scannerModal').classList.remove('hidden');
+    startScanner();
+  }
+
+  function closeScannerModal(){
+    document.getElementById('scannerModal').classList.add('hidden');
+    stopScanner();
+    clearScanUI();
+  }
+
+  document.getElementById('openScannerBtn').addEventListener('click', () => openScannerModal());
+  document.getElementById('closeScannerBtn').addEventListener('click', () => closeScannerModal());
+  // admin convenience button kept hidden in markup; remains hidden and not wired for admin
+
+  function clearScanUI(){
+    const feed = document.getElementById('scan-feedback');
+    const txt = document.getElementById('scan-text');
+    if (feed) feed.textContent = '';
+    if (txt) { txt.textContent = ''; txt.style.color = ''; }
+  }
+
+  async function startScanner(){
+    if (scannerRunning) return;
+    const readerId = 'reader';
+    const element = document.getElementById(readerId);
+    if (!element) return alert('Scanner element not found');
+
+    html5QrCodeInstance = new Html5Qrcode(readerId, { formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] });
+    try {
+      await html5QrCodeInstance.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        qrCodeMessage => {
+          // Called when a QR code is successfully scanned
+          handleScannedCode(qrCodeMessage);
+        },
+        errorMessage => {
+          // ignore or log scanning errors
+        }
+      );
+      scannerRunning = true;
+    } catch (err) {
+      console.error('Scanner start error', err);
+      alert('Camera error. Please allow camera access or try a different device.');
+    }
+  }
+
+  async function stopScanner(){
+    if (!scannerRunning || !html5QrCodeInstance) return;
+    try {
+      await html5QrCodeInstance.stop();
+    } catch(e){}
+    try { html5QrCodeInstance.clear(); } catch(e){}
+    html5QrCodeInstance = null;
+    scannerRunning = false;
+  }
+
+  function showScanResultValid(id, buyer){
+    const feed = document.getElementById('scan-feedback');
+    const txt = document.getElementById('scan-text');
+    if (feed) feed.textContent = '✅';
+    if (txt) { txt.textContent = `Ticket valid — ${id} (${buyer})`; txt.style.color = 'green'; }
+  }
+  function showScanResultAlreadyUsed(id){
+    const feed = document.getElementById('scan-feedback');
+    const txt = document.getElementById('scan-text');
+    if (feed) feed.textContent = '⚠️';
+    if (txt) { txt.textContent = `Already used — ${id}`; txt.style.color = 'orangered'; }
+  }
+  function showScanResultInvalid(){
+    const feed = document.getElementById('scan-feedback');
+    const txt = document.getElementById('scan-text');
+    if (feed) feed.textContent = '❌';
+    if (txt) { txt.textContent = `Invalid ticket`; txt.style.color = 'red'; }
+  }
+  
+  // FIX: Moved this function to the global scope. It was incorrectly placed inside `handleScannedCode`.
+  function openVendorEditModal(vId){
+    const vendors = loadVendors();
+    const idx = vendors.findIndex(x => String(x.id) === String(vId));
+    if (idx === -1) return alert('Listing not found');
+    const v = vendors[idx];
+
+    // Only owner can edit
+    if (!currentUser || String(currentUser.uid) !== String(v.ownerUid)) {
+      alert('Only the owner can edit this listing.');
+      return;
+    }
+
+    // Safe defaults
+    if (!Array.isArray(v.additionalImages)) v.additionalImages = [];
+
+    const panel = document.createElement('div');
+    panel.className = 'modal-backdrop';
+    panel.innerHTML = `
+      <div class="modal-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="font-weight:700">Edit Listing</h3>
+          <button id="closeEditModal" style="background:#ef4444;color:white;padding:6px 10px;border-radius:6px;border:0;cursor:pointer">Close</button>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:260px">
+            <label style="font-size:12px;color:#555">Name</label>
+            <input id="edit-name" value="${escapeHtml(v.name)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px">
+          </div>
+          <div style="flex:1;min-width:200px">
+            <label style="font-size:12px;color:#555">Category</label>
+            <select id="edit-category" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px">
+              <option ${v.category==='Festival'?'selected':''}>Festival</option>
+              <option ${v.category==='Food'?'selected':''}>Food</option>
+              <option ${v.category==='Stay'?'selected':''}>Stay</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <label style="font-size:12px;color:#555">Location (text)</label>
+          <input id="edit-location" value="${escapeHtml(v.location||'')}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px">
+          <div style="font-size:12px;color:#666;margin-top:6px">Coords (optional):</div>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <input id="edit-lat" type="number" step="0.000001" placeholder="lat" value="${v.coords?escapeHtml(String(v.coords.lat)) : ''}" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px">
+            <input id="edit-lng" type="number" step="0.000001" placeholder="lng" value="${v.coords?escapeHtml(String(v.coords.lng)) : ''}" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px">
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <label style="font-size:12px;color:#555">Details</label>
+          <textarea id="edit-details" style="width:100%;height:100px;padding:8px;border:1px solid #ddd;border-radius:6px">${escapeHtml(v.details||'')}</textarea>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:600;margin-bottom:6px">Main Photo</div>
+            <img id="edit-main-preview" src="${escapeHtml(v.imageData || v.image || `https://source.unsplash.com/400x250/?${encodeURIComponent(v.category)}`)}" style="width:200px;height:140px;object-fit:cover;border-radius:6px">
+            <div style="margin-top:6px">
+              <input id="edit-main-file" type="file" accept="image/*" style="display:none">
+              <button id="btn-replace-main" class="text-xs px-2 py-1 border rounded text-gray-700">Replace Main Photo</button>
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:260px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-weight:600;margin-bottom:6px">Extra Photos</div>
+              <div>
+                <input id="edit-extra-files" type="file" accept="image/*" multiple style="display:none">
+                <button id="btn-add-extra" class="text-xs px-2 py-1 border rounded text-gray-700">Add Photos</button>
+              </div>
+            </div>
+            <div id="extra-grid" style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${v.additionalImages.map((src,i)=>`
+                <div class="extra-thumb" data-index="${i}" style="position:relative">
+                  <img src="${escapeHtml(src)}" style="width:120px;height:80px;object-fit:cover;border-radius:6px">
+                  <button class="remove-extra" data-index="${i}" style="position:absolute;top:4px;right:4px;background:#ef4444;color:white;border:0;border-radius:4px;padding:2px 6px;cursor:pointer">x</button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div>
+            <label style="font-size:12px;color:#555">Availability</label>
+            <select id="edit-availability" style="padding:8px;border:1px solid #ddd;border-radius:6px">
+              <option value="available" ${v.availability==='available'?'selected':''}>available</option>
+              <option value="limited" ${v.availability==='limited'?'selected':''}>limited</option>
+              <option value="soldout" ${v.availability==='soldout'?'selected':''}>Sold Out / Unavailable</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:220px">
+            <label style="font-size:12px;color:#555">Offer (optional)</label>
+            <input id="edit-offer" value="${escapeHtml(v.offerText||'')}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px">
+          </div>
+        </div>
+
+        <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+          <button id="saveEdit" style="background:#16a34a;color:white;padding:8px 12px;border-radius:6px;border:0;cursor:pointer">Save Changes</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(panel);
+
+    panel.querySelector('#closeEditModal').addEventListener('click', () => panel.remove());
+
+    // Replace main photo
+    const mainFile = panel.querySelector('#edit-main-file');
+    const mainPreview = panel.querySelector('#edit-main-preview');
+    panel.querySelector('#btn-replace-main').addEventListener('click', () => mainFile.click());
+    mainFile.addEventListener('change', async () => {
+      const f = mainFile.files && mainFile.files[0];
+      if (!f) return;
+      if (!f.type.startsWith('image/')) return alert('Select an image file');
+      if (f.size > MAX_IMAGE_SIZE) return alert('File too large (max 2MB)');
+      try {
+        const b64 = await fileToBase64(f);
+        v.imageData = b64;
+        mainPreview.src = b64;
+      } catch(e){ alert('Could not read image'); }
+    });
+
+    // Add extra photos
+    const extraFiles = panel.querySelector('#edit-extra-files');
+    const addExtraBtn = panel.querySelector('#btn-add-extra');
+    const extraGrid = panel.querySelector('#extra-grid');
+    addExtraBtn.addEventListener('click', () => extraFiles.click());
+    extraFiles.addEventListener('change', async () => {
+      const files = Array.from(extraFiles.files || []);
+      for (const f of files) {
+        if (!f.type.startsWith('image/')) { alert('Skip non-image'); continue; }
+        if (f.size > MAX_IMAGE_SIZE) { alert('File too large (>2MB): ' + (f.name||'')); continue; }
+        try {
+          const b64 = await fileToBase64(f);
+          v.additionalImages.push(b64);
+          const wrap = document.createElement('div');
+          const idxNew = v.additionalImages.length - 1;
+          wrap.className = 'extra-thumb';
+          wrap.dataset.index = String(idxNew);
+          wrap.style.position = 'relative';
+          wrap.innerHTML = `
+            <img src="${escapeHtml(b64)}" style="width:120px;height:80px;object-fit:cover;border-radius:6px">
+            <button class="remove-extra" data-index="${idxNew}" style="position:absolute;top:4px;right:4px;background:#ef4444;color:white;border:0;border-radius:4px;padding:2px 6px;cursor:pointer">x</button>
+          `;
+          extraGrid.appendChild(wrap);
+        } catch(e){ console.warn('skip image', e); }
+      }
+      extraFiles.value = '';
+    });
+
+    // Remove extra photo (delegation)
+    extraGrid.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.remove-extra');
+      if (!btn) return;
+      const index = parseInt(btn.dataset.index, 10);
+      if (isNaN(index)) return;
+      v.additionalImages.splice(index, 1);
+      // Re-render thumbnails with fresh indexes
+      extraGrid.innerHTML = v.additionalImages.map((src,i)=>`
+        <div class="extra-thumb" data-index="${i}" style="position:relative">
+          <img src="${escapeHtml(src)}" style="width:120px;height:80px;object-fit:cover;border-radius:6px">
+          <button class="remove-extra" data-index="${i}" style="position:absolute;top:4px;right:4px;background:#ef4444;color:white;border:0;border-radius:4px;padding:2px 6px;cursor:pointer">x</button>
+        </div>
+      `).join('');
+    });
+
+    // Save all
+    panel.querySelector('#saveEdit').addEventListener('click', () => {
+      const name = (panel.querySelector('#edit-name').value || '').trim();
+      const category = panel.querySelector('#edit-category').value;
+      const location = (panel.querySelector('#edit-location').value || '').trim();
+      const details = (panel.querySelector('#edit-details').value || '').trim();
+      const avail = panel.querySelector('#edit-availability').value;
+      const offer = (panel.querySelector('#edit-offer').value || '').trim();
+      const latStr = (panel.querySelector('#edit-lat').value || '').trim();
+      const lngStr = (panel.querySelector('#edit-lng').value || '').trim();
+
+      if (!name || !category) return alert('Name and category are required');
+
+      v.name = name;
+      v.category = category;
+      v.location = location;
+      v.details = details;
+      v.availability = avail;
+      v.offerText = offer;
+
+      if (latStr && lngStr) {
+        const lat = parseFloat(latStr), lng = parseFloat(lngStr);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          v.coords = { lat, lng };
+        }
+      }
+
+      vendors[idx] = v;
+      saveVendors(vendors);
+      panel.remove();
+      renderManageVendors();
+      renderAll();
+      alert('Listing updated.');
+    });
+  }
+
+  function handleScannedCode(qrCodeMessage){
+    const msg = String(qrCodeMessage).trim();
+    const outFeedback = document.getElementById('scan-feedback');
+    const outText = document.getElementById('scan-text');
+    if (!outFeedback || !outText) return;
+
+    // Ticket flow
+    if (msg.startsWith('TKT-')) {
+      const tickets = JSON.parse(localStorage.getItem('tickets')) || [];
+      const idx = tickets.findIndex(t => t.id === msg);
+      if (idx !== -1) {
+        const found = tickets[idx];
+        if (!found.used) {
+          // valid & unused
+          found.used = true;
+          tickets[idx] = found;
+          localStorage.setItem('tickets', JSON.stringify(tickets));
+          showScanResultValid(found.id, found.buyer);
+          playSuccessTone();
+        } else {
+          // already used
+          showScanResultAlreadyUsed(found.id);
+          playErrorTone();
+        }
+      } else {
+        // not found
+        showScanResultInvalid();
+        playErrorTone();
+      }
+      // stop scanner and keep feedback for a short while
+      setTimeout(()=>{ stopScanner(); }, 800);
+      return;
+    }
+
+    // Vendor QR flow (VND-{id}) or numeric
+    let candidateId = null;
+    if (msg.startsWith('VND-')) candidateId = msg.slice(4);
+    else if (/^\d+$/.test(msg)) candidateId = msg;
+    if (candidateId) {
+      const vendors = loadVendors();
+      const foundVendor = vendors.find(v => String(v.id) === String(candidateId));
+      if (foundVendor) {
+        outFeedback.textContent = '✅';
+        outText.textContent = `Vendor: ${foundVendor.name}`;
+        outText.style.color = 'green';
+        playSuccessTone();
+        // stop scanner and open vendor modal after short delay
+        setTimeout(()=>{ stopScanner(); }, 300);
+        setTimeout(()=>{ openVendorModal(foundVendor.id); closeScannerModal(); }, 350);
+        return;
+      } else {
+        outFeedback.textContent = '❌';
+        outText.textContent = 'Vendor not found';
+        outText.style.color = 'red';
+        playErrorTone();
+        setTimeout(()=>{ stopScanner(); }, 800);
+        return;
+      }
+    }
+    
+    // fallback: unknown code
+    outFeedback.textContent = '❓';
+    outText.textContent = `Scanned: ${escapeHtml(msg)}`;
+    outText.style.color = 'orange';
+    playErrorTone();
+    setTimeout(()=>{ stopScanner(); }, 800);
+  }
+
+  /*******************************
+   * Admin helpers (behavior requested)
+   *******************************/
+  const ADMIN_EMAIL = "admin@utsav.com";
+  const ADMIN_PASS = "12345";
+
+  const adminOpenBtn = document.getElementById('adminOpenBtn');
+  const adminLoginModal = document.getElementById('adminLoginModal');
+  const adminModalLogin = document.getElementById('adminModalLogin');
+  const adminModalCancel = document.getElementById('adminModalCancel');
+  const adminModalError = document.getElementById('adminModalError');
+  const adminModalEmail = document.getElementById('adminModalEmail');
+  const adminModalPass = document.getElementById('adminModalPass');
+  const closeAdminLogin = document.getElementById('closeAdminLogin');
+  const adminDashboardSection = document.getElementById('admin-dashboard');
+  const adminDashboardLogout = document.getElementById('admin-dashboard-logout');
+  const adminPhotoList = document.getElementById('admin-photo-list');
+  const adminSaveAllBtn = document.getElementById('admin-save-all');
+  const adminRevertAllBtn = document.getElementById('admin-revert-all');
+
+  // Show admin login popup
+  adminOpenBtn?.addEventListener('click', () => {
+    // if already logged in -> perform logout
+    if (isAdminLoggedIn) {
+      adminSignOut();
+      return;
+    }
+    adminModalEmail.value = '';
+    adminModalPass.value = '';
+    adminModalError.style.display = 'none';
+    adminLoginModal.classList.remove('hidden');
+  });
+
+  closeAdminLogin?.addEventListener('click', () => adminLoginModal.classList.add('hidden'));
+  adminModalCancel?.addEventListener('click', () => adminLoginModal.classList.add('hidden'));
+
+  // Admin login attempt
+  adminModalLogin.addEventListener('click', () => {
+    const email = (adminModalEmail.value || '').trim();
+    const pass = (adminModalPass.value || '').trim();
+    if (email === ADMIN_EMAIL && pass === ADMIN_PASS) {
+      // success
+      isAdminLoggedIn = true;
+      localStorage.setItem(KEY_ADMIN_LOGGED, '1');
+      adminLoginModal.classList.add('hidden');
+      activateAdminMode();
+    } else {
+      adminModalError.style.display = 'block';
+      setTimeout(()=> adminModalError.style.display = 'none', 2500);
+    }
+  });
+
+  // Admin dashboard logout (button inside dashboard)
+  adminDashboardLogout?.addEventListener('click', () => adminSignOut());
+
+  function activateAdminMode(){
+    // Show admin-dashboard section (replace where necessary)
+    Object.values(pages).forEach(p => p.classList.remove('active'));
+    adminDashboardSection.classList.remove('hidden');
+
+    // Update the header admin button to show "Logout"
+    adminOpenBtn.textContent = 'Logout Admin';
+    adminOpenBtn.classList.remove('bg-yellow-400');
+    adminOpenBtn.classList.add('bg-red-500');
+    isAdminLoggedIn = true;
+    localStorage.setItem(KEY_ADMIN_LOGGED, '1');
+
+    renderAdminVendors();
+    renderAdminPhotoControls();
+    renderAdminHeaderState();
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  function adminSignOut(){
+    isAdminLoggedIn = false;
+    localStorage.removeItem(KEY_ADMIN_LOGGED);
+    // hide admin dashboard
+    adminDashboardSection.classList.add('hidden');
+
+    // restore header admin button
+    adminOpenBtn.textContent = 'Admin Login';
+    adminOpenBtn.classList.remove('bg-red-500');
+    adminOpenBtn.classList.add('bg-yellow-400');
+
+    // return to landing page or previous mode
+    showPage('landing');
+    renderAll();
+    alert('Admin logged out.');
+  }
+
+  function renderAdminHeaderState(){
+    // called on renderAll to set header button based on admin session
+    isAdminLoggedIn = !!localStorage.getItem(KEY_ADMIN_LOGGED);
+    if (isAdminLoggedIn) {
+      adminOpenBtn.textContent = 'Logout Admin';
+      adminOpenBtn.classList.remove('bg-yellow-400');
+      adminOpenBtn.classList.add('bg-red-500');
+      adminDashboardSection.classList.remove('hidden');
+      // Hide scanner access for admin
+      document.getElementById('openScannerBtn').classList.add('hidden');
+    } else {
+      adminOpenBtn.textContent = 'Admin Login';
+      adminOpenBtn.classList.remove('bg-red-500');
+      adminOpenBtn.classList.add('bg-yellow-400');
+      adminDashboardSection.classList.add('hidden');
+      document.getElementById('openScannerBtn').classList.remove('hidden');
+    }
+  }
+
+  // Admin vendor list rendering (delete capability)
+  function renderAdminVendors() {
+    const vendors = JSON.parse(localStorage.getItem(KEY_VENDORS)) || [];
+    const list = document.getElementById("admin-vendor-list");
+    if (!list) return;
+    list.innerHTML = "";
+
+    if (vendors.length === 0) {
+      list.innerHTML = "<p class='text-gray-500'>No vendors uploaded yet.</p>";
+      return;
+    }
+
+    vendors.forEach((v, i) => {
+      const div = document.createElement("div");
+      div.className = "p-4 border rounded bg-gray-50 flex justify-between items-center";
+      div.innerHTML = `
+        <div>
+          <p class="font-semibold">${escapeHtml(v.name)} (${escapeHtml(v.category)})</p>
+          <p class="text-sm text-gray-600">${escapeHtml(v.location)}</p>
+        </div>
+        <div>
+          <button data-index="${i}" class="admin-delete-btn bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">Delete</button>
+        </div>
+      `;
+      list.appendChild(div);
+    });
+
+    list.querySelectorAll('.admin-delete-btn').forEach(b => b.addEventListener('click', function(){
+      const idx = parseInt(this.dataset.index);
+      if (!confirm('Delete this vendor?')) return;
+      deleteVendor(idx);
+    }));
+  }
+
+  function deleteVendor(index) {
+    let vendors = JSON.parse(localStorage.getItem(KEY_VENDORS)) || [];
+    const removed = vendors.splice(index, 1);
+    localStorage.setItem(KEY_VENDORS, JSON.stringify(vendors));
+    renderAdminVendors();
+    alert("Vendor deleted!");
+    renderAll();
+  }
+
+  /*******************************
+   * Admin Photo Management
+   *******************************/
+  // predefined photos admin can manage (all "site" photos, vendor images excluded)
+  const PREDEFINED_PHOTOS = [
+    { key: 'siteLogo', label: 'Site Logo', defaultUrl: DEFAULTS.siteLogo, selector: 'header img[alt="logo"]', isSrc: true },
+    { key: 'heroImage', label: 'Hero Image', defaultUrl: DEFAULTS.heroImage, selector: '#heroImage', isSrc: true },
+    { key: 'homepageBackground', label: 'Homepage Background', defaultUrl: DEFAULTS.homepageBackground, selector: 'body', isBackground: true }
+  ];
+
+  function renderAdminPhotoControls(){
+    const stored = loadSitePhotos();
+    adminPhotoList.innerHTML = '';
+    PREDEFINED_PHOTOS.forEach(p => {
+      const override = stored[p.key] || null;
+      const currentUrl = override || p.defaultUrl;
+      const row = document.createElement('div');
+      row.className = 'photo-control';
+      row.innerHTML = `
+        <img class="photo-preview" src="${escapeHtml(currentUrl)}" alt="${escapeHtml(p.label)} preview">
+        <div class="photo-meta">
+          <div style="font-weight:600">${escapeHtml(p.label)}</div>
+          <div style="font-size:12px;color:#666;margin-top:6px">Default: ${escapeHtml(p.defaultUrl)}</div>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <input type="file" accept="image/*" style="display:none" class="photo-file-input" />
+            <button class="admin-change-btn">Change</button>
+            <button class="admin-remove-btn-secondary" style="background:#f97316;color:white;padding:8px 12px;border-radius:8px;border:0;cursor:pointer">Remove (Revert)</button>
+          </div>
+          <div class="text-sm text-gray-500 mt-2">Preview shows current image (overrides saved only after clicking Save Changes).</div>
+        </div>
+      `;
+      adminPhotoList.appendChild(row);
+
+      const preview = row.querySelector('.photo-preview');
+      const fileInput = row.querySelector('.photo-file-input');
+      const changeBtn = row.querySelector('.admin-change-btn');
+      const removeBtn = row.querySelector('.admin-remove-btn-secondary');
+
+      changeBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async (ev) => {
+        const f = fileInput.files && fileInput.files[0];
+        if (!f) return;
+        if (!f.type.startsWith('image/')) { alert('Select an image file'); return; }
+        if (f.size > MAX_IMAGE_SIZE) { alert('File too large (max 2MB)'); return; }
+        const b64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej('err'); r.readAsDataURL(f); });
+        preview.src = b64;
+        // update in-memory stored override until Save pressed
+        const cur = loadSitePhotos();
+        cur[p.key] = b64;
+        saveSitePhotos(cur); // store immediately (so admin sees it) but Save will be final apply for all users - we still persist
+      });
+
+      removeBtn.addEventListener('click', () => {
+        // revert this photo to default (remove override)
+        const cur = loadSitePhotos();
+        delete cur[p.key];
+        saveSitePhotos(cur);
+        preview.src = p.defaultUrl;
+      });
+    });
+  }
+
+  // Save all changes button applies changes and notifies users
+  adminSaveAllBtn?.addEventListener('click', () => {
+    // all overrides already stored via saveSitePhotos during change/remove above.
+    // To ensure "apply for all", we'll call applySitePhotosToUI() and persist.
+    applySitePhotosToUI();
+    alert('Site photo changes saved and applied for all users.');
+  });
+
+  adminRevertAllBtn?.addEventListener('click', () => {
+    if (!confirm('Revert all managed site photos to their original defaults?')) return;
+    saveSitePhotos({});
+    applySitePhotosToUI();
+    renderAdminPhotoControls();
+    alert('All site photos reverted to defaults.');
+  });
+
+  // Apply site photo overrides from localStorage to UI (logo src, hero src, homepage background)
+  function applySitePhotosToUI(){
+    const overrides = loadSitePhotos();
+    PREDEFINED_PHOTOS.forEach(p => {
+      const val = overrides[p.key] || null;
+      const el = document.querySelector(p.selector);
+      if (!el) return;
+      
+      if (p.isSrc) {
+        el.src = val || p.defaultUrl;
+      } else if (p.isBackground) {
+        el.style.backgroundImage = `url('${val || p.defaultUrl}')`;
+        el.style.backgroundSize = "cover";
+        el.style.backgroundPosition = "center";
+      }
+    });
+  }
+
+  /*******************************
+   * Small helpers + boot
+   *******************************/
+  function renderAllOnBoot(){
+    ensureSampleData();
+    // init ui according to stored mode
+    if (appMode === 'visitor') { setHeaderForVisitor(); showVisitorUI(); }
+    else if (appMode === 'business') { setHeaderForBusiness(); showBusinessUI(); }
+    else showPage('landing');
+    renderAll();
+    // Restore admin header state from localStorage
+    renderAdminHeaderState();
+  }
+
+  // helper functions (exposed to global UI)
+  window.showPage = showPage;
+  window.enterMode = enterMode;
+
+  // Apply Homepage Photo on load (if admin changed it) and other site photos
+  window.addEventListener("DOMContentLoaded", function() {
+    // Ensure site photos exist
+    if (!localStorage.getItem(KEY_SITE_PHOTOS)) saveSitePhotos({});
+    applySitePhotosToUI();
+  });
+
+  // boot
+  window.addEventListener('load', () => {
+    renderAllOnBoot();
+  });
+
+  // Expose a debug function to see localStorage keys (optional)
+  window._ud_debug = () => {
+    console.log('vendors', loadVendors());
+    console.log('itinerary', loadItinerary());
+    console.log('tickets', JSON.parse(localStorage.getItem('tickets')||'[]'));
+    console.log('site photos', loadSitePhotos());
+    console.log('admin logged?', !!localStorage.getItem(KEY_ADMIN_LOGGED));
+  };
+  
+  // FIX: Corrected and cleaned up the main click listener.
+  document.addEventListener("click", (e) => {
+    const target = e.target;
+    
+    const openVendorBtn = target.closest(".open-vendor");
+    if (openVendorBtn) {
+        openVendorModal(openVendorBtn.dataset.id);
+        return;
+    }
+    
+    const addToPlanBtn = target.closest(".add-to-plan-small");
+    if (addToPlanBtn) {
+        addToItinerary(addToPlanBtn.dataset.id);
+        return;
+    }
+
+    const viewNearbyBtn = target.closest(".view-nearby");
+    if (viewNearbyBtn) {
+        showNearbyFrom(viewNearbyBtn.dataset.id); // FIX: Changed to correct function name 'showNearbyFrom'
+        return;
+    }
+  });
+
+  </script>
+  
+</body>
+</html>
